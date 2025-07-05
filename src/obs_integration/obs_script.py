@@ -310,9 +310,8 @@ def save_metadata_to_file(metadata: Dict[str, Any]):
     os.makedirs(metadata_output_path, exist_ok=True)
 
     # Generate filename with timestamp
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    scene_name = metadata.get("scene_name", "unknown").replace(" ", "_")
-    filename = f"metadata_{scene_name}_{timestamp}.json"
+    timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
+    filename = f"{timestamp}_metadata.json"
     filepath = os.path.join(metadata_output_path, filename)
 
     try:
