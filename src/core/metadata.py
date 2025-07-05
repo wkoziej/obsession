@@ -3,8 +3,85 @@ Metadata management for OBS Canvas Recording.
 This module handles creation and manipulation of recording metadata.
 """
 
+import re
 import time
 from typing import Dict, List, Tuple, Any
+
+
+def determine_source_type(source_name: str) -> str:
+    """
+    Determine the type of OBS source based on its name.
+
+    Args:
+        source_name: Name of the OBS source
+
+    Returns:
+        Source type: "video", "audio", or "unknown"
+    """
+    if not source_name:
+        return "unknown"
+
+    # Convert to lowercase for case-insensitive matching
+    name_lower = source_name.lower()
+
+    # Audio source patterns - check these first as they're more specific
+    audio_patterns = [
+        # Audio input/output with specific keywords
+        r"(audio|dźwięk|dzwiek)",
+        r"(microphone|mikrofon|mic)",
+        r"(pulse|pulseaudio)",
+        r"(alsa)",
+        r"(speaker|głośnik|glosnik)",
+        r"(headphone|słuchawki|sluchawki)",
+        r"(sound|dźwięk|dzwiek)",
+        r"(wejścia.*dźwięku|wejscia.*dzwieku)",
+        r"(desktop.*audio|pulpit.*dźwięk)",
+        # More specific patterns to avoid conflicts
+        r"(.*audio.*input|.*audio.*output)",
+        r"(.*dźwięk.*input|.*dźwięk.*output)",
+        r"(.*wejścia.*dźwięku|.*wejscia.*dzwieku)",
+    ]
+
+    # Video source patterns
+    video_patterns = [
+        # Camera/Video capture - more specific patterns
+        r"(camera|kamera|webcam|cam)",
+        r"(video|wideo)",
+        r"(v4l2|video4linux)",
+        r"(display|desktop|pulpit|ekran)",
+        r"(window|okno)",
+        r"(browser|przeglądarka)",
+        r"(media|multimedia)",
+        r"(image|zdjęcie)",
+        r"(color|kolor|colour)",
+        r"(text|tekst|gdi)",
+        r"(vlc|video.*source)",
+        r"(screen|monitor)",
+        r"(game|gra)",
+        r"(source.*video)",
+        # More specific video capture patterns
+        r"(urządzenie.*obraz)",
+        r"(przechwytuj.*obraz)",
+        r"(capture.*video)",
+        r"(video.*capture)",
+    ]
+
+    # Check audio patterns first (more specific)
+    for pattern in audio_patterns:
+        if re.search(pattern, name_lower):
+            return "audio"
+
+    # Check video patterns second
+    for pattern in video_patterns:
+        if re.search(pattern, name_lower):
+            return "video"
+
+    # Special case: if contains "input" or "output" but not matched above, likely audio
+    if re.search(r"(input|output|wejście|wyjście|wejscie|wyjscie)", name_lower):
+        return "audio"
+
+    # If no pattern matches, return unknown
+    return "unknown"
 
 
 def create_metadata(
@@ -44,6 +121,9 @@ def create_metadata(
         source_data = source.copy()
         if "x" in source and "y" in source:
             source_data["position"] = {"x": source["x"], "y": source["y"]}
+
+        # Add source type detection
+        source_data["type"] = determine_source_type(source_id)
 
         sources_dict[source_id] = source_data
 
