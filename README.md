@@ -28,7 +28,7 @@ obsession/
 │   └── cli/                      # Interface linii komend
 │       └── extract.py            # CLI dla ekstrakcji
 │
-├── tests/                        # Testy (71 testów, 100% pass)
+├── tests/                        # Testy (78 testów, 100% pass)
 │   ├── test_metadata.py          # Testy metadanych + capabilities
 │   ├── test_extractor.py         # Testy ekstraktora
 │   ├── test_obs_script.py        # Testy integracji OBS
@@ -194,7 +194,7 @@ recording_20250105_143022_extracted/
 
 ## 🧪 System Testowy (TDD)
 
-### Status testów: ✅ 71/71 (100%)
+### Status testów: ✅ 78/78 (100%)
 
 ```bash
 # Uruchom wszystkie testy
@@ -248,7 +248,7 @@ gh issue create --title "Problem description" --body "Detailed description"
 - ✅ Skrypt OBS Python z detekcją capabilities
 - ✅ Ekstraktor FFmpeg z TDD
 - ✅ CLI interface
-- ✅ 71 testów przechodzących
+- ✅ 78 testów przechodzących (78% coverage)
 
 ### 🚧 Faza 2: Hardware Testing (W trakcie)
 - 🔄 Test z kamerą PRI (issue #1)
@@ -282,6 +282,6 @@ MIT License - zobacz [LICENSE](LICENSE) dla szczegółów.
 
 ### Standardy:
 - **TDD**: Red → Green → Refactor
-- **Test coverage**: > 90%
+- **Test coverage**: 78% (cel: >90%)
 - **Code style**: Ruff formatting
 - **Commits**: Atomic z testami
