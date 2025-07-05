@@ -152,25 +152,61 @@ def test_video_file():
 @pytest.fixture
 def basic_source_info():
     """Fixture for basic source information."""
-    return {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}}
+    return {
+        "position": {"x": 0, "y": 0},
+        "scale": {"x": 1.0, "y": 1.0},
+        "dimensions": {
+            "source_width": 1920,
+            "source_height": 1080,
+            "final_width": 1920,
+            "final_height": 1080,
+        },
+    }
 
 
 @pytest.fixture
 def positioned_source_info():
     """Fixture for source with non-zero position."""
-    return {"position": {"x": 1920, "y": 0}, "scale": {"x": 1.0, "y": 1.0}}
+    return {
+        "position": {"x": 1920, "y": 0},
+        "scale": {"x": 1.0, "y": 1.0},
+        "dimensions": {
+            "source_width": 1920,
+            "source_height": 1080,
+            "final_width": 1920,
+            "final_height": 1080,
+        },
+    }
 
 
 @pytest.fixture
 def scaled_source_info():
     """Fixture for source with scaling."""
-    return {"position": {"x": 0, "y": 0}, "scale": {"x": 0.5, "y": 0.5}}
+    return {
+        "position": {"x": 0, "y": 0},
+        "scale": {"x": 0.5, "y": 0.5},
+        "dimensions": {
+            "source_width": 1920,
+            "source_height": 1080,
+            "final_width": 960,
+            "final_height": 540,
+        },
+    }
 
 
 @pytest.fixture
 def complex_source_info():
     """Fixture for source with position and scale."""
-    return {"position": {"x": 100, "y": 50}, "scale": {"x": 0.8, "y": 0.6}}
+    return {
+        "position": {"x": 100, "y": 50},
+        "scale": {"x": 0.8, "y": 0.6},
+        "dimensions": {
+            "source_width": 1920,
+            "source_height": 1080,
+            "final_width": 1536,
+            "final_height": 648,
+        },
+    }
 
 
 @pytest.fixture

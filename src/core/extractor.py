@@ -85,23 +85,53 @@ def calculate_crop_params(
 
     Returns:
         Dictionary with crop parameters (x, y, width, height)
+
+    Raises:
+        ValueError: If source has invalid dimensions (0x0)
     """
     # Extract position and scale from source info
     position = source_info.get("position", {"x": 0, "y": 0})
     scale = source_info.get("scale", {"x": 1.0, "y": 1.0})
 
-    # For POC: assume standard source size (1920x1080) scaled by scale factor
-    # In real implementation, this would come from source metadata
-    standard_source_width = 1920
-    standard_source_height = 1080
+    # Get actual source dimensions from metadata
+    dimensions = source_info.get("dimensions", {})
 
-    # Calculate crop dimensions based on standard source size and scale
-    crop_width = int(standard_source_width * scale["x"])
-    crop_height = int(standard_source_height * scale["y"])
+    # Use source dimensions (original video size) for crop calculation
+    # The final dimensions are after scaling in OBS, but we need to crop from the original video
+    source_width = dimensions.get("source_width", 1920)  # Default fallback
+    source_height = dimensions.get("source_height", 1080)  # Default fallback
+
+    # Check if source has valid dimensions
+    if source_width <= 0 or source_height <= 0:
+        raise ValueError(
+            f"Source has invalid dimensions: {source_width}x{source_height}"
+        )
+
+    # Calculate crop dimensions based on source dimensions and scale
+    # But ensure we don't exceed the actual source dimensions
+    desired_crop_width = int(source_width * scale["x"])
+    desired_crop_height = int(source_height * scale["y"])
+
+    # Limit crop dimensions to actual source dimensions
+    crop_width = min(desired_crop_width, source_width)
+    crop_height = min(desired_crop_height, source_height)
 
     # Position is where to crop from
     crop_x = int(position["x"])
     crop_y = int(position["y"])
+
+    # Ensure crop region doesn't exceed canvas bounds
+    # If the crop region would go beyond the canvas, adjust it
+    if crop_x + crop_width > canvas_size[0]:
+        crop_width = canvas_size[0] - crop_x
+    if crop_y + crop_height > canvas_size[1]:
+        crop_height = canvas_size[1] - crop_y
+
+    # Ensure minimum crop size and that position is not negative
+    crop_x = max(crop_x, 0)
+    crop_y = max(crop_y, 0)
+    crop_width = max(crop_width, 1)
+    crop_height = max(crop_height, 1)
 
     return {"x": crop_x, "y": crop_y, "width": crop_width, "height": crop_height}
 
@@ -137,6 +167,7 @@ def _extract_video_source(
     Raises:
         subprocess.CalledProcessError: If FFmpeg command fails
         FileNotFoundError: If FFmpeg is not found
+        ValueError: If source has invalid dimensions
     """
     # Calculate crop parameters
     crop_params = calculate_crop_params(source_info, canvas_size)
@@ -186,13 +217,16 @@ def _extract_audio_source(input_file: str, output_file: Path) -> None:
     subprocess.run(cmd, check=True, capture_output=True, text=True)
 
 
-def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResult:
+def extract_sources(
+    video_file: str, metadata: Dict[str, Any], output_dir: Optional[str] = None
+) -> ExtractionResult:
     """
     Extract individual sources from canvas recording.
 
     Args:
         video_file: Path to the input video file
         metadata: Recording metadata containing source positions
+        output_dir: Optional custom output directory path
 
     Returns:
         ExtractionResult with success status and extracted files
@@ -222,19 +256,22 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
 
     # Create output directory
     video_path = Path(video_file)
-    output_dir = video_path.parent / f"{video_path.stem}_extracted"
+    if output_dir:
+        output_dir_path = Path(output_dir)
+    else:
+        output_dir_path = video_path.parent / f"{video_path.stem}_extracted"
 
     try:
-        output_dir.mkdir(exist_ok=True)
+        output_dir_path.mkdir(exist_ok=True, parents=True)
     except PermissionError:
         return ExtractionResult(
             success=False,
-            error_message=f"Permission denied: Cannot create output directory {output_dir}",
+            error_message=f"Permission denied: Cannot create output directory {output_dir_path}",
         )
     except OSError as e:
         return ExtractionResult(
             success=False,
-            error_message=f"Failed to create output directory {output_dir}: {e}",
+            error_message=f"Failed to create output directory {output_dir_path}: {e}",
         )
 
     # Get canvas size for crop calculations
@@ -254,13 +291,28 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
 
         # Extract video if source has video
         if has_video:
-            video_output_file = output_dir / f"{safe_source_name}.mp4"
-
+            # Check if source has valid dimensions before creating output file
             try:
+                dimensions = source_info.get("dimensions", {})
+                source_width = dimensions.get("source_width", 1920)
+                source_height = dimensions.get("source_height", 1080)
+
+                if source_width <= 0 or source_height <= 0:
+                    print(
+                        f"Warning: Skipping video extraction for {source_name}: Source has invalid dimensions: {source_width}x{source_height}"
+                    )
+                    continue
+
+                video_output_file = output_dir_path / f"{safe_source_name}.mp4"
+
                 _extract_video_source(
                     video_file, video_output_file, source_info, canvas_size
                 )
                 extracted_files.append(str(video_output_file))
+            except ValueError as e:
+                # Skip sources with invalid dimensions (e.g., 0x0)
+                print(f"Warning: Skipping video extraction for {source_name}: {e}")
+                continue
             except subprocess.CalledProcessError as e:
                 return ExtractionResult(
                     success=False,
@@ -274,7 +326,7 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
 
         # Extract audio if source has audio
         if has_audio:
-            audio_output_file = output_dir / f"{safe_source_name}.m4a"
+            audio_output_file = output_dir_path / f"{safe_source_name}.m4a"
 
             try:
                 _extract_audio_source(video_file, audio_output_file)
@@ -318,4 +370,4 @@ class SourceExtractor:
         Returns:
             ExtractionResult with success status and extracted files
         """
-        return extract_sources(self.input_file, self.metadata)
+        return extract_sources(self.input_file, self.metadata, self.output_dir)

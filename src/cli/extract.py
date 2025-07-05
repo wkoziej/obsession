@@ -93,7 +93,7 @@ def main() -> int:
         if args.verbose:
             print("Starting extraction...")
 
-        result = extract_sources(str(video_path), metadata)
+        result = extract_sources(str(video_path), metadata, args.output_dir)
 
         if result.success:
             print(f"Successfully extracted {len(result.extracted_files)} sources:")
