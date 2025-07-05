@@ -203,18 +203,31 @@ class TestOBSScript:
 
         # Mock save function
         with patch("src.obs_integration.obs_script.save_metadata_to_file") as mock_save:
-            collect_and_save_metadata()
+            # Mock determine_source_capabilities to return specific capabilities
+            with patch(
+                "src.obs_integration.obs_script.determine_source_capabilities"
+            ) as mock_caps:
+                mock_caps.return_value = {"has_audio": True, "has_video": True}
 
-            # Verify save was called
-            mock_save.assert_called_once()
+                collect_and_save_metadata()
 
-            # Get the metadata that was passed to save
-            saved_metadata = mock_save.call_args[0][0]
-            assert saved_metadata["canvas_size"] == [1920, 1080]
-            assert saved_metadata["fps"] == 30.0
-            assert "recording_stop_time" in saved_metadata
-            assert "total_sources" in saved_metadata
-            assert "Camera1" in saved_metadata["sources"]
+                # Verify save was called
+                mock_save.assert_called_once()
 
-            # Verify sceneitem_list_release was called
-            mock_obs_functions.sceneitem_list_release.assert_called_once()
+                # Get the metadata that was passed to save
+                saved_metadata = mock_save.call_args[0][0]
+                assert saved_metadata["canvas_size"] == [1920, 1080]
+                assert saved_metadata["fps"] == 30.0
+                assert "recording_stop_time" in saved_metadata
+                assert "total_sources" in saved_metadata
+                assert "Camera1" in saved_metadata["sources"]
+
+                # Verify source has capabilities fields
+                camera_source = saved_metadata["sources"]["Camera1"]
+                assert "has_audio" in camera_source
+                assert "has_video" in camera_source
+                assert camera_source["has_audio"] is True
+                assert camera_source["has_video"] is True
+
+                # Verify sceneitem_list_release was called
+                mock_obs_functions.sceneitem_list_release.assert_called_once()

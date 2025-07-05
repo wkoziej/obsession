@@ -15,6 +15,28 @@ except ImportError:
     # For testing purposes when OBS is not available
     obs = None
 
+# Import capabilities detection from metadata module
+try:
+    from src.core.metadata import determine_source_capabilities
+except ImportError:
+    # Fallback for when running in OBS without proper Python path
+    def determine_source_capabilities(obs_source) -> Dict[str, bool]:
+        """Fallback implementation for OBS environment."""
+        if obs_source is None or obs is None:
+            return {"has_audio": False, "has_video": False}
+
+        flags = obs.obs_source_get_output_flags(obs_source)
+
+        # OBS source flags constants
+        OBS_SOURCE_VIDEO = 0x001
+        OBS_SOURCE_AUDIO = 0x002
+
+        return {
+            "has_audio": bool(flags & OBS_SOURCE_AUDIO),
+            "has_video": bool(flags & OBS_SOURCE_VIDEO),
+        }
+
+
 # Global variables for script state
 script_enabled = False
 metadata_output_path = ""
@@ -221,6 +243,9 @@ def collect_and_save_metadata():
             final_width = int(source_width * scale.x)
             final_height = int(source_height * scale.y)
 
+            # Determine source capabilities (has_audio/has_video)
+            capabilities = determine_source_capabilities(source)
+
             # Store source data
             sources[source_name] = {
                 "name": source_name,
@@ -234,6 +259,9 @@ def collect_and_save_metadata():
                     "final_height": final_height,
                 },
                 "visible": obs.obs_sceneitem_visible(scene_item),
+                # Add capabilities for new extractor
+                "has_audio": capabilities["has_audio"],
+                "has_video": capabilities["has_video"],
             }
 
         # Release scene items list
