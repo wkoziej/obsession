@@ -229,19 +229,28 @@ def collect_and_save_metadata():
             source_name = obs.obs_source_get_name(source)
             source_id = obs.obs_source_get_id(source)
 
-            # Get position and scale
+            # Get position, scale and bounds
             pos = obs.vec2()
             scale = obs.vec2()
+            bounds = obs.vec2()
             obs.obs_sceneitem_get_pos(scene_item, pos)
             obs.obs_sceneitem_get_scale(scene_item, scale)
+            obs.obs_sceneitem_get_bounds(scene_item, bounds)
+            bounds_type = obs.obs_sceneitem_get_bounds_type(scene_item)
 
             # Get source dimensions
             source_width = obs.obs_source_get_width(source)
             source_height = obs.obs_source_get_height(source)
 
-            # Calculate final dimensions
-            final_width = int(source_width * scale.x)
-            final_height = int(source_height * scale.y)
+            # Calculate final dimensions - priorytet dla bounds
+            if (
+                bounds.x > 0 and bounds.y > 0 and bounds_type != 0
+            ):  # 0 = OBS_BOUNDS_NONE
+                final_width = int(bounds.x)
+                final_height = int(bounds.y)
+            else:
+                final_width = int(source_width * scale.x)
+                final_height = int(source_height * scale.y)
 
             # Determine source capabilities (has_audio/has_video)
             capabilities = determine_source_capabilities(source)
@@ -252,6 +261,7 @@ def collect_and_save_metadata():
                 "id": source_id,
                 "position": {"x": int(pos.x), "y": int(pos.y)},
                 "scale": {"x": scale.x, "y": scale.y},
+                "bounds": {"x": bounds.x, "y": bounds.y, "type": bounds_type},
                 "dimensions": {
                     "source_width": source_width,
                     "source_height": source_height,

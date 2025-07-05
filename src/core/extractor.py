@@ -79,59 +79,67 @@ def calculate_crop_params(
     """
     Calculate crop parameters for FFmpeg based on source info.
 
+    WAŻNE: Cropuje z CANVAS (wynikowego filmu), nie ze źródła!
+    Źródła w OBS są renderowane na canvas, więc musimy cropować z canvas.
+
     Args:
-        source_info: Source information with position and scale
+        source_info: Source information with position and bounds
         canvas_size: Canvas dimensions [width, height]
 
     Returns:
-        Dictionary with crop parameters (x, y, width, height)
-
-    Raises:
-        ValueError: If source has invalid dimensions (0x0)
+        Dictionary with crop parameters (x, y, width, height) for canvas
     """
-    # Extract position and scale from source info
+    # Extract position and bounds from source info
     position = source_info.get("position", {"x": 0, "y": 0})
-    scale = source_info.get("scale", {"x": 1.0, "y": 1.0})
+    bounds = source_info.get("bounds", {})
 
-    # Get actual source dimensions from metadata
-    dimensions = source_info.get("dimensions", {})
+    # Pozycja źródła na canvas
+    canvas_x = int(position["x"])
+    canvas_y = int(position["y"])
 
-    # Use source dimensions (original video size) for crop calculation
-    # The final dimensions are after scaling in OBS, but we need to crop from the original video
-    source_width = dimensions.get("source_width", 1920)  # Default fallback
-    source_height = dimensions.get("source_height", 1080)  # Default fallback
+    # Rozmiar źródła na canvas (po przeskalowaniu)
+    if (
+        bounds
+        and "x" in bounds
+        and "y" in bounds
+        and bounds["x"] > 0
+        and bounds["y"] > 0
+    ):
+        # Użyj bounds jako prawdziwego rozmiaru
+        source_width_on_canvas = int(bounds["x"])
+        source_height_on_canvas = int(bounds["y"])
+    else:
+        # Fallback do dimensions lub scale
+        dimensions = source_info.get("dimensions", {})
+        scale = source_info.get("scale", {"x": 1.0, "y": 1.0})
 
-    # Check if source has valid dimensions
-    if source_width <= 0 or source_height <= 0:
-        raise ValueError(
-            f"Source has invalid dimensions: {source_width}x{source_height}"
-        )
+        source_width = dimensions.get("source_width", 1920)
+        source_height = dimensions.get("source_height", 1080)
 
-    # Calculate crop dimensions based on source dimensions and scale
-    # But ensure we don't exceed the actual source dimensions
-    desired_crop_width = int(source_width * scale["x"])
-    desired_crop_height = int(source_height * scale["y"])
+        source_width_on_canvas = int(source_width * scale["x"])
+        source_height_on_canvas = int(source_height * scale["y"])
 
-    # Limit crop dimensions to actual source dimensions
-    crop_width = min(desired_crop_width, source_width)
-    crop_height = min(desired_crop_height, source_height)
+    # Oblicz widoczną część źródła na canvas
+    # Jeśli źródło jest częściowo poza canvas, cropuj tylko widoczną część
 
-    # Position is where to crop from
-    crop_x = int(position["x"])
-    crop_y = int(position["y"])
+    # Lewa krawędź widocznej części
+    visible_left = max(0, canvas_x)
+    # Prawa krawędź widocznej części
+    visible_right = min(canvas_size[0], canvas_x + source_width_on_canvas)
+    # Górna krawędź widocznej części
+    visible_top = max(0, canvas_y)
+    # Dolna krawędź widocznej części
+    visible_bottom = min(canvas_size[1], canvas_y + source_height_on_canvas)
 
-    # Ensure crop region doesn't exceed canvas bounds
-    # If the crop region would go beyond the canvas, adjust it
-    if crop_x + crop_width > canvas_size[0]:
-        crop_width = canvas_size[0] - crop_x
-    if crop_y + crop_height > canvas_size[1]:
-        crop_height = canvas_size[1] - crop_y
+    # Rozmiar widocznej części
+    visible_width = max(1, visible_right - visible_left)
+    visible_height = max(1, visible_bottom - visible_top)
 
-    # Ensure minimum crop size and that position is not negative
-    crop_x = max(crop_x, 0)
-    crop_y = max(crop_y, 0)
-    crop_width = max(crop_width, 1)
-    crop_height = max(crop_height, 1)
+    # Parametry crop dla canvas
+    crop_x = visible_left
+    crop_y = visible_top
+    crop_width = visible_width
+    crop_height = visible_height
 
     return {"x": crop_x, "y": crop_y, "width": crop_width, "height": crop_height}
 
