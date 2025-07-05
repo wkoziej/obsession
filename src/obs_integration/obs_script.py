@@ -7,7 +7,7 @@ when recording stops.
 import os
 import json
 import time
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 try:
     import obspython as obs
@@ -34,19 +34,25 @@ def script_properties():
     """Define script properties for OBS Studio UI."""
     if obs is None:
         return None
-    
+
     props = obs.obs_properties_create()
-    
+
     # Enable/disable script
     obs.obs_properties_add_bool(props, "enabled", "Enable metadata collection")
-    
+
     # Output path for metadata
-    obs.obs_properties_add_path(props, "output_path", "Metadata output directory",
-                                obs.OBS_PATH_DIRECTORY, "", "")
-    
+    obs.obs_properties_add_path(
+        props,
+        "output_path",
+        "Metadata output directory",
+        obs.OBS_PATH_DIRECTORY,
+        "",
+        "",
+    )
+
     # Add info text
     obs.obs_properties_add_text(props, "info", "Info", obs.OBS_TEXT_INFO)
-    
+
     return props
 
 
@@ -54,23 +60,24 @@ def script_defaults(settings):
     """Set default values for script properties."""
     if obs is None:
         return
-    
+
     obs.obs_data_set_default_bool(settings, "enabled", True)
     obs.obs_data_set_default_string(settings, "output_path", "")
-    obs.obs_data_set_default_string(settings, "info", 
-                                   "Metadata will be saved when recording stops.")
+    obs.obs_data_set_default_string(
+        settings, "info", "Metadata will be saved when recording stops."
+    )
 
 
 def script_update(settings):
     """Called when script properties are updated."""
     global script_enabled, metadata_output_path
-    
+
     if obs is None:
         return
-    
+
     script_enabled = obs.obs_data_get_bool(settings, "enabled")
     metadata_output_path = obs.obs_data_get_string(settings, "output_path")
-    
+
     print(f"[Canvas Recorder] Script enabled: {script_enabled}")
     print(f"[Canvas Recorder] Output path: {metadata_output_path}")
 
@@ -78,16 +85,16 @@ def script_update(settings):
 def script_load(settings):
     """Called when script is loaded."""
     global script_enabled
-    
+
     if obs is None:
         print("[Canvas Recorder] OBS Python API not available")
         return
-    
+
     print("[Canvas Recorder] Script loaded")
-    
+
     # Register frontend event callback
     obs.obs_frontend_add_event_callback(on_event)
-    
+
     # Initialize settings
     script_update(settings)
 
@@ -96,9 +103,9 @@ def script_unload():
     """Called when script is unloaded."""
     if obs is None:
         return
-    
+
     print("[Canvas Recorder] Script unloaded")
-    
+
     # Remove frontend event callback
     obs.obs_frontend_remove_event_callback(on_event)
 
@@ -107,11 +114,11 @@ def on_event(event):
     """Handle OBS frontend events."""
     if obs is None or not script_enabled:
         return
-    
+
     if event == obs.OBS_FRONTEND_EVENT_RECORDING_STARTED:
         print("[Canvas Recorder] Recording started - preparing metadata collection")
         prepare_metadata_collection()
-    
+
     elif event == obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED:
         print("[Canvas Recorder] Recording stopped - collecting metadata")
         collect_and_save_metadata()
@@ -120,32 +127,36 @@ def on_event(event):
 def prepare_metadata_collection():
     """Prepare for metadata collection when recording starts."""
     global current_scene_data
-    
+
     if obs is None:
         return
-    
+
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
     if current_scene is None:
         print("[Canvas Recorder] No current scene found")
         return
-    
+
     # Get video info
     video_info = obs.obs_video_info()
     obs.obs_get_video_info(video_info)
-    
+
     # Store basic info
     current_scene_data = {
         "canvas_size": [video_info.base_width, video_info.base_height],
-        "fps": video_info.fps_num / video_info.fps_den if video_info.fps_den > 0 else 30.0,
+        "fps": video_info.fps_num / video_info.fps_den
+        if video_info.fps_den > 0
+        else 30.0,
         "recording_start_time": time.time(),
-        "scene_name": obs.obs_source_get_name(current_scene)
+        "scene_name": obs.obs_source_get_name(current_scene),
     }
-    
-    print(f"[Canvas Recorder] Prepared metadata for scene: {current_scene_data['scene_name']}")
+
+    print(
+        f"[Canvas Recorder] Prepared metadata for scene: {current_scene_data['scene_name']}"
+    )
     print(f"[Canvas Recorder] Canvas size: {current_scene_data['canvas_size']}")
     print(f"[Canvas Recorder] FPS: {current_scene_data['fps']}")
-    
+
     # Release source reference
     obs.obs_source_release(current_scene)
 
@@ -153,90 +164,84 @@ def prepare_metadata_collection():
 def collect_and_save_metadata():
     """Collect scene metadata and save to file."""
     global current_scene_data, metadata_output_path
-    
+
     if obs is None:
         return
-    
+
     if not current_scene_data:
         print("[Canvas Recorder] No scene data prepared")
         return
-    
+
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
     if current_scene is None:
         print("[Canvas Recorder] No current scene found")
         return
-    
+
     try:
         # Collect scene items
         sources = {}
-        
+
         def enum_scene_items(scene, scene_item, data):
             """Callback for enumerating scene items."""
             source = obs.obs_sceneitem_get_source(scene_item)
             if source is None:
                 return True
-            
+
             # Get source info
             source_name = obs.obs_source_get_name(source)
             source_id = obs.obs_source_get_id(source)
-            
+
             # Get position and scale
             pos = obs.vec2()
             scale = obs.vec2()
             obs.obs_sceneitem_get_pos(scene_item, pos)
             obs.obs_sceneitem_get_scale(scene_item, scale)
-            
+
             # Get source dimensions
             source_width = obs.obs_source_get_width(source)
             source_height = obs.obs_source_get_height(source)
-            
+
             # Calculate final dimensions
             final_width = int(source_width * scale.x)
             final_height = int(source_height * scale.y)
-            
+
             # Store source data
             sources[source_name] = {
                 "name": source_name,
                 "id": source_id,
-                "position": {
-                    "x": int(pos.x),
-                    "y": int(pos.y)
-                },
-                "scale": {
-                    "x": scale.x,
-                    "y": scale.y
-                },
+                "position": {"x": int(pos.x), "y": int(pos.y)},
+                "scale": {"x": scale.x, "y": scale.y},
                 "dimensions": {
                     "source_width": source_width,
                     "source_height": source_height,
                     "final_width": final_width,
-                    "final_height": final_height
+                    "final_height": final_height,
                 },
-                "visible": obs.obs_sceneitem_visible(scene_item)
+                "visible": obs.obs_sceneitem_visible(scene_item),
             }
-            
+
             return True  # Continue enumeration
-        
+
         # Enumerate scene items
         obs.obs_scene_enum_items(current_scene, enum_scene_items, None)
-        
+
         # Complete metadata
         metadata = {
             **current_scene_data,
             "sources": sources,
             "recording_stop_time": time.time(),
-            "total_sources": len(sources)
+            "total_sources": len(sources),
         }
-        
+
         # Save metadata to file
         save_metadata_to_file(metadata)
-        
+
         print(f"[Canvas Recorder] Collected metadata for {len(sources)} sources")
-        
+
     except Exception as e:
         print(f"[Canvas Recorder] Error collecting metadata: {e}")
-    
+
     finally:
         # Release source reference
         obs.obs_source_release(current_scene)
@@ -245,26 +250,26 @@ def collect_and_save_metadata():
 def save_metadata_to_file(metadata: Dict[str, Any]):
     """Save metadata to JSON file."""
     global metadata_output_path
-    
+
     if not metadata_output_path:
         # Use default path relative to OBS
         metadata_output_path = os.path.expanduser("~/obs-canvas-metadata")
-    
+
     # Ensure directory exists
     os.makedirs(metadata_output_path, exist_ok=True)
-    
+
     # Generate filename with timestamp
     timestamp = time.strftime("%Y%m%d_%H%M%S")
     scene_name = metadata.get("scene_name", "unknown").replace(" ", "_")
     filename = f"metadata_{scene_name}_{timestamp}.json"
     filepath = os.path.join(metadata_output_path, filename)
-    
+
     try:
-        with open(filepath, 'w', encoding='utf-8') as f:
+        with open(filepath, "w", encoding="utf-8") as f:
             json.dump(metadata, f, indent=2, ensure_ascii=False)
-        
+
         print(f"[Canvas Recorder] Metadata saved to: {filepath}")
-        
+
     except Exception as e:
         print(f"[Canvas Recorder] Error saving metadata: {e}")
 
@@ -273,4 +278,4 @@ def save_metadata_to_file(metadata: Dict[str, Any]):
 if __name__ == "__main__":
     print("Canvas Recording Metadata Collector")
     print("This script should be loaded in OBS Studio")
-    print("Testing mode - OBS API not available") 
+    print("Testing mode - OBS API not available")

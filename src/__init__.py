@@ -1,2 +1,2 @@
 # OBS Canvas Recorder
-# Main package 
+# Main package

@@ -1,4 +1,4 @@
-# Pre-commit hooks dla projektu Synkopa
+# Pre-commit hooks dla projektu OBS Canvas Recording
 # Instalacja: uv run pre-commit install
 # Uruchomienie: uv run pre-commit run --all-files
 
@@ -14,8 +14,11 @@ repos:
       - id: check-json
       - id: check-merge-conflict
       - id: check-added-large-files
-        args: ['--maxkb=1000']
+        args: ['--maxkb=2000']  # Większy limit dla video fixtures
       - id: debug-statements
+      - id: check-case-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
 
   # Ruff - szybki linter i formatter dla Python
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -23,34 +26,37 @@ repos:
     hooks:
       # Linting (sprawdzanie jakości kodu)
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--fix, --exit-non-zero-on-fix, --extend-ignore=E402]
         types_or: [python, pyi]
       # Formatowanie kodu
       - id: ruff-format
         types_or: [python, pyi]
 
-  # Sprawdzanie typów z mypy (opcjonalne - może być wolne)
+  # Sprawdzanie typów z mypy (wyłączone na początek)
   # - repo: https://github.com/pre-commit/mirrors-mypy
   #   rev: v1.8.0
   #   hooks:
   #     - id: mypy
-  #       additional_dependencies: [types-all]
-  #       args: [--ignore-missing-imports]
+  #       additional_dependencies: [types-requests]
+  #       args: [--ignore-missing-imports, --follow-imports=silent, --no-strict-optional]
+  #       # Ignoruj OBS scripting files które nie mają typów
+  #       exclude: ^src/obs_integration/obs_script\.py$
 
-  # Sprawdzanie bezpieczeństwa z bandit (wyłączone - false positive)
+  # Sprawdzanie bezpieczeństwa z bandit (wyłączone na początek)
   # - repo: https://github.com/PyCQA/bandit
   #   rev: 1.7.5
   #   hooks:
   #     - id: bandit
-  #       args: [-r, src/]
+  #       args: [-r, src/, -ll]  # Low level, pomijaj subprocess calls dla FFmpeg
   #       exclude: tests/
 
-  # Sortowanie importów (ruff już to robi, ale można dodać jako backup)
-  # - repo: https://github.com/pycqa/isort
-  #   rev: 5.13.2
+  # Sprawdzanie dokumentacji (wyłączone na początek)
+  # - repo: https://github.com/pycqa/pydocstyle
+  #   rev: 6.3.0
   #   hooks:
-  #     - id: isort
-  #       args: ["--profile", "black"]
+  #     - id: pydocstyle
+  #       args: [--convention=google]
+  #       exclude: ^tests/
 
 # Konfiguracja globalna
 default_language_version:
@@ -63,10 +69,28 @@ files: ^(src/|tests/).*\.py$
 exclude: |
   (?x)^(
     \.venv/|
+    venv/|
     build/|
     dist/|
     .*\.egg-info/|
     htmlcov/|
     \.pytest_cache/|
-    __pycache__/
-  ).*$ 
+    __pycache__/|
+    .*\.pyc|
+    .*\.pyo|
+    tests/fixtures/.*|
+    .*test_output.*
+  ).*$
+
+# Konfiguracja CI
+ci:
+  autofix_commit_msg: |
+    [pre-commit.ci] auto fixes from pre-commit hooks
+
+    for more information, see https://pre-commit.ci
+  autofix_prs: true
+  autoupdate_branch: ''
+  autoupdate_commit_msg: '[pre-commit.ci] pre-commit autoupdate'
+  autoupdate_schedule: weekly
+  skip: []
+  submodules: false 

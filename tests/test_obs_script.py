@@ -2,11 +2,11 @@
 Test module for OBS script functionality.
 Since obspython is not available in test environment, we mock it.
 """
-import pytest
+
 import json
 import os
 import tempfile
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 import sys
 
 # Mock obspython module
@@ -16,13 +16,16 @@ mock_obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED = 2
 mock_obs.OBS_PATH_DIRECTORY = "directory"
 mock_obs.OBS_TEXT_INFO = "info"
 
+
 # Mock vec2 class
 class MockVec2:
     def __init__(self):
         self.x = 0.0
         self.y = 0.0
 
+
 mock_obs.vec2 = MockVec2
+
 
 # Mock video info class
 class MockVideoInfo:
@@ -32,93 +35,107 @@ class MockVideoInfo:
         self.fps_num = 30
         self.fps_den = 1
 
+
 mock_obs.obs_video_info = MockVideoInfo
 
 # Add mock to sys.modules before importing our module
-sys.modules['obspython'] = mock_obs
+sys.modules["obspython"] = mock_obs
 
-# Now import our module
+# Import our module after mocking
 from src.obs_integration.obs_script import (
-    script_description, script_load, script_unload, on_event,
-    prepare_metadata_collection, collect_and_save_metadata,
-    save_metadata_to_file
+    script_description,
+    script_load,
+    script_unload,
+    on_event,
+    prepare_metadata_collection,
+    collect_and_save_metadata,
+    save_metadata_to_file,
 )
 
 
 class TestOBSScript:
     """Test cases for OBS script functionality."""
-    
+
     def test_script_description(self):
         """Test script description returns proper HTML."""
         description = script_description()
         assert "Canvas Recording Metadata Collector" in description
         assert "<h2>" in description
         assert "<p>" in description
-    
+
     def test_script_load_with_mock_obs(self):
         """Test script load functionality."""
         mock_settings = Mock()
-        
+
         # Mock OBS functions
         mock_obs.obs_frontend_add_event_callback = Mock()
         mock_obs.obs_data_get_bool = Mock(return_value=True)
         mock_obs.obs_data_get_string = Mock(return_value="/tmp/test")
-        
+
         # Call script_load
         script_load(mock_settings)
-        
+
         # Verify callback was registered
         mock_obs.obs_frontend_add_event_callback.assert_called_once()
-    
+
     def test_script_unload_with_mock_obs(self):
         """Test script unload functionality."""
         mock_obs.obs_frontend_remove_event_callback = Mock()
-        
+
         # Call script_unload
         script_unload()
-        
+
         # Verify callback was removed
         mock_obs.obs_frontend_remove_event_callback.assert_called_once()
-    
+
     def test_on_event_recording_started(self):
         """Test event handler for recording started."""
-        with patch('src.obs_integration.obs_script.prepare_metadata_collection') as mock_prepare:
+        with patch(
+            "src.obs_integration.obs_script.prepare_metadata_collection"
+        ) as mock_prepare:
             # Set script as enabled
             import src.obs_integration.obs_script as script_module
+
             script_module.script_enabled = True
-            
+
             # Call event handler
             on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STARTED)
-            
+
             # Verify prepare was called
             mock_prepare.assert_called_once()
-    
+
     def test_on_event_recording_stopped(self):
         """Test event handler for recording stopped."""
-        with patch('src.obs_integration.obs_script.collect_and_save_metadata') as mock_collect:
+        with patch(
+            "src.obs_integration.obs_script.collect_and_save_metadata"
+        ) as mock_collect:
             # Set script as enabled
             import src.obs_integration.obs_script as script_module
+
             script_module.script_enabled = True
-            
+
             # Call event handler
             on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED)
-            
+
             # Verify collect was called
             mock_collect.assert_called_once()
-    
+
     def test_on_event_script_disabled(self):
         """Test event handler when script is disabled."""
-        with patch('src.obs_integration.obs_script.prepare_metadata_collection') as mock_prepare:
+        with patch(
+            "src.obs_integration.obs_script.prepare_metadata_collection"
+        ) as mock_prepare:
             # Set script as disabled
             import src.obs_integration.obs_script as script_module
+
             script_module.script_enabled = False
-            
+
             # Call event handler
             on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STARTED)
-            
+
             # Verify prepare was NOT called
             mock_prepare.assert_not_called()
-    
+
     def test_prepare_metadata_collection(self):
         """Test metadata preparation."""
         # Mock OBS functions
@@ -127,86 +144,86 @@ class TestOBSScript:
         mock_obs.obs_source_get_name = Mock(return_value="Test Scene")
         mock_obs.obs_source_release = Mock()
         mock_obs.obs_get_video_info = Mock()
-        
+
         # Call prepare_metadata_collection
         prepare_metadata_collection()
-        
+
         # Verify OBS functions were called
         mock_obs.obs_frontend_get_current_scene.assert_called_once()
         mock_obs.obs_source_get_name.assert_called_once_with(mock_scene)
         mock_obs.obs_source_release.assert_called_once_with(mock_scene)
         mock_obs.obs_get_video_info.assert_called_once()
-    
+
     def test_save_metadata_to_file(self):
         """Test metadata saving to file."""
         # Create temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
             # Set output path
             import src.obs_integration.obs_script as script_module
+
             script_module.metadata_output_path = temp_dir
-            
+
             # Test metadata
             metadata = {
                 "canvas_size": [1920, 1080],
                 "fps": 30.0,
                 "sources": {
-                    "Camera1": {
-                        "name": "Camera1",
-                        "position": {"x": 0, "y": 0}
-                    }
+                    "Camera1": {"name": "Camera1", "position": {"x": 0, "y": 0}}
                 },
-                "scene_name": "Test Scene"
+                "scene_name": "Test Scene",
             }
-            
+
             # Save metadata
             save_metadata_to_file(metadata)
-            
+
             # Verify file was created
             files = os.listdir(temp_dir)
             assert len(files) == 1
             assert files[0].startswith("metadata_Test_Scene_")
             assert files[0].endswith(".json")
-            
+
             # Verify file content
-            with open(os.path.join(temp_dir, files[0]), 'r') as f:
+            with open(os.path.join(temp_dir, files[0]), "r") as f:
                 saved_metadata = json.load(f)
-            
+
             assert saved_metadata["canvas_size"] == [1920, 1080]
             assert saved_metadata["fps"] == 30.0
             assert "Camera1" in saved_metadata["sources"]
-    
+
     def test_collect_and_save_metadata_no_scene_data(self):
         """Test collect metadata when no scene data is prepared."""
         # Clear scene data
         import src.obs_integration.obs_script as script_module
+
         script_module.current_scene_data = {}
-        
+
         # Mock print to capture output
-        with patch('builtins.print') as mock_print:
+        with patch("builtins.print") as mock_print:
             collect_and_save_metadata()
-            
+
             # Verify error message was printed
             mock_print.assert_called_with("[Canvas Recorder] No scene data prepared")
-    
+
     def test_collect_and_save_metadata_with_sources(self):
         """Test collect metadata with scene sources."""
         # Setup scene data
         import src.obs_integration.obs_script as script_module
+
         script_module.current_scene_data = {
             "canvas_size": [1920, 1080],
             "fps": 30.0,
-            "scene_name": "Test Scene"
+            "scene_name": "Test Scene",
         }
-        
+
         # Mock scene and sources
         mock_scene = Mock()
-        mock_scene_item = Mock()
+
         mock_source = Mock()
-        
+
         mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene)
         mock_obs.obs_source_release = Mock()
         mock_obs.obs_scene_enum_items = Mock()
-        
+
         # Mock source properties
         mock_obs.obs_sceneitem_get_source = Mock(return_value=mock_source)
         mock_obs.obs_source_get_name = Mock(return_value="Camera1")
@@ -214,21 +231,21 @@ class TestOBSScript:
         mock_obs.obs_source_get_width = Mock(return_value=1920)
         mock_obs.obs_source_get_height = Mock(return_value=1080)
         mock_obs.obs_sceneitem_visible = Mock(return_value=True)
-        
+
         # Mock position and scale
         mock_obs.obs_sceneitem_get_pos = Mock()
         mock_obs.obs_sceneitem_get_scale = Mock()
-        
+
         # Mock save function
-        with patch('src.obs_integration.obs_script.save_metadata_to_file') as mock_save:
+        with patch("src.obs_integration.obs_script.save_metadata_to_file") as mock_save:
             collect_and_save_metadata()
-            
+
             # Verify save was called
             mock_save.assert_called_once()
-            
+
             # Get the metadata that was passed to save
             saved_metadata = mock_save.call_args[0][0]
             assert saved_metadata["canvas_size"] == [1920, 1080]
             assert saved_metadata["fps"] == 30.0
             assert "recording_stop_time" in saved_metadata
-            assert "total_sources" in saved_metadata 
+            assert "total_sources" in saved_metadata

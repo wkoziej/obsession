@@ -1,1 +1,1 @@
-# OBS Studio integration package 
+# OBS Studio integration package

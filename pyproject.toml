@@ -80,6 +80,7 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "ffmpeg-python>=0.2.0",
+    "pre-commit>=4.2.0",
     "pytest>=8.4.1",
     "pytest-cov>=6.2.1",
 ]
