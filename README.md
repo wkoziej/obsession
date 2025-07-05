@@ -1,17 +1,44 @@
-# OBS Canvas Recorder
+# OBSession
 
 System automatycznej ekstrakcji źródeł z nagrań canvas OBS na podstawie metadanych pozycji zapisanych podczas nagrywania.
 
-## 🎯 Problem i Rozwiązanie
-
-**Problem**: Nagrywanie wielu źródeł w OBS wymaga ręcznego wycinania każdego źródła po nagraniu, co jest czasochłonne i podatne na błędy.
-
-**Rozwiązanie**: Automatyczna ekstrakcja źródeł z nagrania canvas OBS wykorzystująca:
+Automatyczna ekstrakcja źródeł z nagrania canvas OBS wykorzystująca:
 - OBS API do detekcji capabilities źródeł (audio/video)
 - Metadane pozycji zapisane podczas nagrywania
 - FFmpeg do precyzyjnej ekstrakcji
 
 ## 🏗️ Architektura Systemu
+
+### Główne Komponenty
+
+#### 1. **Core Modules** (`src/core/`)
+- **`metadata.py`**: Zarządzanie metadanymi i detekcja capabilities
+  - `determine_source_capabilities()` - OBS API do detekcji audio/video
+  - `create_metadata()` - tworzenie struktury metadanych
+  - `validate_metadata()` - walidacja struktury
+  
+- **`extractor.py`**: Ekstrakcja źródeł przez FFmpeg
+  - `extract_sources()` - główna funkcja ekstrakcji
+  - `ExtractionResult` - klasa wyników
+  - `calculate_crop_params()` - obliczanie parametrów crop
+  - `sanitize_filename()` - bezpieczne nazwy plików
+
+#### 2. **OBS Integration** (`src/obs_integration/`)
+- **`obs_script.py`**: Główny skrypt OBS Studio
+  - Event handlers dla start/stop recording
+  - Automatyczne zbieranie metadanych sceny
+  - Konfiguracja przez OBS UI
+  
+- **`scene_analyzer.py`**: Analiza scen OBS
+  - `SceneAnalyzer` - klasa do analizy scen
+  - Enumeracja źródeł i ich właściwości
+  - Backup funkcjonalności dla skryptu
+
+#### 3. **CLI Interface** (`src/cli/`)
+- **`extract.py`**: Interface linii komend
+  - Argumenty: video_file, metadata_file, --output-dir, --verbose
+  - Walidacja plików wejściowych
+  - Integracja z core ekstraktorem
 
 ### Aktualna Struktura Projektu
 ```
@@ -105,11 +132,6 @@ uv run python -m cli.extract recording.mkv metadata.json
 }
 ```
 
-### Kluczowe zmiany:
-- **`has_audio`/`has_video`**: Detekcja przez OBS API (`obs_source_get_output_flags`)
-- **Brak pola `type`**: Zastąpione precyzyjnymi flagami
-- **Specyficzna ekstrakcja**: Video → `.mp4`, Audio → `.m4a`
-
 ## 🔧 Instalacja i Setup
 
 ### Wymagania
@@ -192,6 +214,22 @@ recording_20250105_143022_extracted/
 - **`has_audio=false && has_video=false`** → pomijane
 - **Bezpieczne nazwy plików**: znaki specjalne zastąpione `_`
 
+## ⚙️ Techniczne Szczegóły
+
+### Detekcja Capabilities
+System używa OBS API do precyzyjnej detekcji możliwości źródeł:
+```python
+flags = obs.obs_source_get_output_flags(obs_source)
+OBS_SOURCE_VIDEO = 0x001  # Źródło ma video
+OBS_SOURCE_AUDIO = 0x002  # Źródło ma audio
+```
+
+### Parametry FFmpeg
+- **Video**: H.264, CRF 23, preset fast, crop filter
+- **Audio**: AAC, 128kbps, bez video (`-vn`)
+- **Crop**: `crop=width:height:x:y` na podstawie pozycji w OBS
+
+
 ## 🧪 System Testowy (TDD)
 
 ### Status testów: ✅ 78/78 (100%)
@@ -215,70 +253,6 @@ uv run pytest tests/test_obs_script.py tests/test_scene_analyzer.py
 - **Extractor**: Ekstrakcja video/audio, crop parameters, error handling  
 - **OBS Integration**: Script functionality, scene analysis
 - **CLI**: Argument parsing, file handling, error reporting
-
-## 🔄 Refaktoryzacja (Grudzień 2024)
-
-### Co zostało zmienione:
-1. **TDD → GREEN → REFACTOR**: Przejście z analizy nazw na OBS API
-2. **Nowe pola**: `has_audio`/`has_video` zamiast `type`
-3. **Specyficzna ekstrakcja**: Osobne pliki dla audio i video
-4. **DRY + KISS**: Wspólne funkcje pomocnicze, prostsza logika
-5. **Usunięcie kompatybilności wstecznej**: Zgodnie z wymaganiami
-
-### Funkcje kluczowe:
-- `determine_source_capabilities(obs_source)` - detekcja przez OBS API
-- `_extract_video_source()` / `_extract_audio_source()` - specyficzna ekstrakcja
-- `SourceExtractor` class - kompatybilność z testami
-
-## 🐛 Issue Tracking
-
-### Aktywne issue:
-- **#1**: [Przetestować kamerę przez PRI (kabel/WiFi)](https://github.com/wkoziej/obsession/issues/1)
-
-### Zgłaszanie problemów:
-```bash
-# Używaj gh CLI z PAGER=cat
-export PAGER=cat
-gh issue create --title "Problem description" --body "Detailed description"
-```
-
-## 🔮 Roadmap
-
-### ✅ Faza 1: MVP Core (Ukończona)
-- ✅ Skrypt OBS Python z detekcją capabilities
-- ✅ Ekstraktor FFmpeg z TDD
-- ✅ CLI interface
-- ✅ 78 testów przechodzących (78% coverage)
-
-### 🚧 Faza 2: Hardware Testing (W trakcie)
-- 🔄 Test z kamerą PRI (issue #1)
-- ⏳ Weryfikacja różnych typów źródeł
-- ⏳ Performance testing
-
-### 📋 Faza 3: Production Ready
-- ⏳ Error recovery i logging
-- ⏳ Batch processing
-- ⏳ File watcher service
-- ⏳ GUI interface
-
-### 🌟 Faza 4: Advanced Features
-- ⏳ Export do NLE (Kdenlive, DaVinci Resolve)
-- ⏳ Web preview interface
-- ⏳ AI scene detection
-- ⏳ Real-time preview
-
-## 📝 Licencja
-
-MIT License - zobacz [LICENSE](LICENSE) dla szczegółów.
-
-## 🤝 Kontrybuowanie
-
-1. Fork projektu
-2. Utwórz feature branch (`git checkout -b feature/AmazingFeature`)
-3. Napisz testy dla nowej funkcjonalności (TDD)
-4. Commit zmiany (`git commit -m 'Add AmazingFeature'`)
-5. Push do branch (`git push origin feature/AmazingFeature`)
-6. Otwórz Pull Request
 
 ### Standardy:
 - **TDD**: Red → Green → Refactor

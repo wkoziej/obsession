@@ -109,3 +109,4 @@ config/secrets.yml
 
 # Dependencies symlinks (for CI/CD)
 cinemon-deps
+out/
