@@ -1,284 +1,301 @@
 """
-Test module for metadata functionality.
-Following TDD approach - starting with RED phase.
+Tests for metadata management functionality.
 """
 
-import pytest
-from src.core.metadata import create_metadata, determine_source_type, validate_metadata
+import json
+import time
+from unittest.mock import Mock, patch
+from src.core.metadata import (
+    create_metadata,
+    validate_metadata,
+    determine_source_capabilities,
+)
 
 
-class TestMetadata:
-    """Test cases for metadata creation and handling."""
+class TestSourceCapabilitiesDetection:
+    """Test source capabilities detection using OBS API."""
 
-    def test_create_empty_metadata(self):
-        """Test creating metadata with no sources."""
-        # Given
-        sources = []
-        canvas_size = (1920, 1080)
+    @patch("src.core.metadata.obs")
+    def test_determine_source_capabilities_audio_only(self, mock_obs):
+        """Test detection of audio-only source."""
+        # Mock OBS source with only audio flag
+        mock_source = Mock()
+        mock_obs.obs_source_get_output_flags.return_value = 0x002  # OBS_SOURCE_AUDIO
 
-        # When
-        metadata = create_metadata(sources, canvas_size=canvas_size)
+        result = determine_source_capabilities(mock_source)
 
-        # Then
-        assert metadata["canvas_size"] == [1920, 1080]
-        assert metadata["sources"] == {}
+        assert result == {"has_audio": True, "has_video": False}
+        mock_obs.obs_source_get_output_flags.assert_called_once_with(mock_source)
+
+    @patch("src.core.metadata.obs")
+    def test_determine_source_capabilities_video_only(self, mock_obs):
+        """Test detection of video-only source."""
+        mock_source = Mock()
+        mock_obs.obs_source_get_output_flags.return_value = 0x001  # OBS_SOURCE_VIDEO
+
+        result = determine_source_capabilities(mock_source)
+
+        assert result == {"has_audio": False, "has_video": True}
+
+    @patch("src.core.metadata.obs")
+    def test_determine_source_capabilities_both(self, mock_obs):
+        """Test detection of audio+video source."""
+        mock_source = Mock()
+        mock_obs.obs_source_get_output_flags.return_value = (
+            0x003  # OBS_SOURCE_VIDEO | OBS_SOURCE_AUDIO
+        )
+
+        result = determine_source_capabilities(mock_source)
+
+        assert result == {"has_audio": True, "has_video": True}
+
+    @patch("src.core.metadata.obs")
+    def test_determine_source_capabilities_none(self, mock_obs):
+        """Test detection of source with no audio/video."""
+        mock_source = Mock()
+        mock_obs.obs_source_get_output_flags.return_value = 0x000  # No flags
+
+        result = determine_source_capabilities(mock_source)
+
+        assert result == {"has_audio": False, "has_video": False}
+
+    def test_determine_source_capabilities_none_source(self):
+        """Test handling of None source."""
+        result = determine_source_capabilities(None)
+        assert result == {"has_audio": False, "has_video": False}
+
+
+class TestMetadataWithCapabilities:
+    """Test metadata creation with new has_audio/has_video fields."""
+
+    def test_metadata_has_audio_video_flags(self):
+        """Test that metadata contains has_audio and has_video fields."""
+        sources = [
+            {"name": "Camera", "x": 0, "y": 0, "obs_source": Mock()},
+            {"name": "Microphone", "x": 100, "y": 100, "obs_source": Mock()},
+        ]
+
+        with patch("src.core.metadata.determine_source_capabilities") as mock_caps:
+            mock_caps.side_effect = [
+                {"has_audio": True, "has_video": True},  # Camera
+                {"has_audio": True, "has_video": False},  # Microphone
+            ]
+
+            metadata = create_metadata(sources)
+
+            # Check Camera source
+            camera = metadata["sources"]["Camera"]
+            assert camera["has_audio"] is True
+            assert camera["has_video"] is True
+            assert "type" not in camera  # Old field should not exist
+
+            # Check Microphone source
+            mic = metadata["sources"]["Microphone"]
+            assert mic["has_audio"] is True
+            assert mic["has_video"] is False
+            assert "type" not in mic
+
+    def test_metadata_without_obs_source(self):
+        """Test metadata creation when obs_source is not provided."""
+        sources = [{"name": "Unknown Source", "x": 0, "y": 0}]
+
+        metadata = create_metadata(sources)
+
+        source = metadata["sources"]["Unknown Source"]
+        assert source["has_audio"] is False
+        assert source["has_video"] is False
+
+
+class TestMetadataCreation:
+    """Test metadata creation functionality."""
+
+    def test_create_metadata_basic(self):
+        """Test basic metadata creation."""
+        sources = [
+            {"name": "Camera", "x": 0, "y": 0},
+            {"name": "Microphone", "x": 100, "y": 100},
+        ]
+
+        metadata = create_metadata(sources)
+
+        # Check basic structure
+        assert "canvas_size" in metadata
+        assert "sources" in metadata
         assert "fps" in metadata
         assert "timestamp" in metadata
 
-    def test_create_metadata_with_single_source(self):
-        """Test creating metadata with one source."""
-        # Given
-        sources = [{"name": "Camera1", "x": 0, "y": 0, "width": 1920, "height": 1080}]
-        canvas_size = (1920, 1080)
+        # Check sources
+        assert "Camera" in metadata["sources"]
+        assert "Microphone" in metadata["sources"]
 
-        # When
-        metadata = create_metadata(sources, canvas_size=canvas_size)
-
-        # Then
-        assert len(metadata["sources"]) == 1
-        assert "Camera1" in metadata["sources"]
-        assert metadata["sources"]["Camera1"]["position"]["x"] == 0
-        assert metadata["sources"]["Camera1"]["position"]["y"] == 0
-
-    def test_create_metadata_with_multiple_sources(self):
-        """Test creating metadata with multiple sources."""
-        # Given
-        sources = [
-            {"name": "Camera1", "x": 0, "y": 0, "width": 1920, "height": 1080},
-            {"name": "Camera2", "x": 1920, "y": 0, "width": 1920, "height": 1080},
-        ]
-        canvas_size = (3840, 1080)
-
-        # When
-        metadata = create_metadata(sources, canvas_size=canvas_size)
-
-        # Then
-        assert len(metadata["sources"]) == 2
-        assert metadata["canvas_size"] == [3840, 1080]
-        assert metadata["sources"]["Camera1"]["position"]["x"] == 0
-        assert metadata["sources"]["Camera2"]["position"]["x"] == 1920
-
-    def test_metadata_validation_invalid_canvas_size(self):
-        """Test metadata validation with invalid canvas size."""
-        # Given
-        sources = []
-        canvas_size = (0, 0)  # Invalid
-
-        # When/Then
-        with pytest.raises(ValueError, match="Canvas size must be positive"):
-            create_metadata(sources, canvas_size=canvas_size)
-
-    def test_metadata_validation_invalid_source_position(self):
-        """Test metadata validation with invalid source position."""
-        # Given
-        sources = [
-            {"name": "Camera1", "x": -100, "y": 0, "width": 1920, "height": 1080}
-        ]
-        canvas_size = (1920, 1080)
-
-        # When/Then
-        with pytest.raises(ValueError, match="Source position cannot be negative"):
-            create_metadata(sources, canvas_size=canvas_size)
-
-
-class TestSourceTypeDetection:
-    """Test cases for source type detection functionality."""
-
-    def test_determine_video_source_type(self):
-        """Test identifying video source by name patterns."""
-        # Given
-        video_sources = [
-            "Urządzenie przechwytujące obraz (V4L2)",
-            "Webcam",
-            "Camera",
-            "Video Capture Device",
-            "Kamera",
-            "Przechwytywanie wideo",
-            "Display Capture",
-            "Window Capture",
-            "Browser Source",
-            "Media Source",
-            "Image Source",
-            "Color Source",
-            "Text (GDI+)",
-            "VLC Video Source",
-        ]
-
-        # When/Then
-        for source_name in video_sources:
-            source_type = determine_source_type(source_name)
-            assert source_type == "video", (
-                f"Expected 'video' for {source_name}, got {source_type}"
-            )
-
-    def test_determine_audio_source_type(self):
-        """Test identifying audio source by name patterns."""
-        # Given
-        audio_sources = [
-            "Przechwytywanie wejścia dźwięku (PulseAudio)",
-            "Audio Input Capture",
-            "Microphone",
-            "Mikrofon",
-            "Audio Output Capture",
-            "Desktop Audio",
-            "Dźwięk pulpitu",
-            "Audio Input",
-            "Audio Output",
-            "Pulse Audio",
-            "ALSA Input",
-            "ALSA Output",
-        ]
-
-        # When/Then
-        for source_name in audio_sources:
-            source_type = determine_source_type(source_name)
-            assert source_type == "audio", (
-                f"Expected 'audio' for {source_name}, got {source_type}"
-            )
-
-    def test_determine_unknown_source_type(self):
-        """Test handling unknown source types."""
-        # Given
-        unknown_sources = [
-            "Unknown Source",
-            "Custom Plugin",
-            "Mysterious Device",
-            "",
-            "Special Effect",
-        ]
-
-        # When/Then
-        for source_name in unknown_sources:
-            source_type = determine_source_type(source_name)
-            assert source_type == "unknown", (
-                f"Expected 'unknown' for {source_name}, got {source_type}"
-            )
-
-    def test_create_metadata_includes_source_types(self):
-        """Test that created metadata includes source types."""
-        # Given
-        sources = [
-            {
-                "name": "Urządzenie przechwytujące obraz (V4L2)",
-                "x": 0,
-                "y": 0,
-                "width": 640,
-                "height": 360,
-            },
-            {
-                "name": "Przechwytywanie wejścia dźwięku (PulseAudio)",
-                "x": 0,
-                "y": 0,
-                "width": 0,
-                "height": 0,
-            },
-        ]
+    def test_create_metadata_with_custom_canvas_size(self):
+        """Test metadata creation with custom canvas size."""
+        sources = [{"name": "Source1", "x": 0, "y": 0}]
         canvas_size = (1280, 720)
 
-        # When
         metadata = create_metadata(sources, canvas_size=canvas_size)
 
-        # Then
-        video_source = metadata["sources"]["Urządzenie przechwytujące obraz (V4L2)"]
-        audio_source = metadata["sources"][
-            "Przechwytywanie wejścia dźwięku (PulseAudio)"
+        assert metadata["canvas_size"] == [1280, 720]
+
+    def test_create_metadata_with_custom_fps(self):
+        """Test metadata creation with custom FPS."""
+        sources = [{"name": "Source1", "x": 0, "y": 0}]
+        fps = 60.0
+
+        metadata = create_metadata(sources, fps=fps)
+
+        assert metadata["fps"] == 60.0
+
+    def test_create_metadata_empty_sources(self):
+        """Test metadata creation with empty sources list."""
+        metadata = create_metadata([])
+
+        assert metadata["sources"] == {}
+        assert len(metadata["sources"]) == 0
+
+    def test_create_metadata_source_positions(self):
+        """Test that source positions are correctly stored."""
+        sources = [
+            {"name": "Source1", "x": 100, "y": 200},
+            {"name": "Source2", "x": 300, "y": 400},
         ]
 
-        assert "type" in video_source
-        assert video_source["type"] == "video"
-        assert "type" in audio_source
-        assert audio_source["type"] == "audio"
+        metadata = create_metadata(sources)
 
-    def test_source_type_case_insensitive(self):
-        """Test that source type detection is case insensitive."""
-        # Given
-        test_cases = [
-            ("CAMERA", "video"),
-            ("camera", "video"),
-            ("Camera", "video"),
-            ("MICROPHONE", "audio"),
-            ("microphone", "audio"),
-            ("Microphone", "audio"),
-        ]
+        source1 = metadata["sources"]["Source1"]
+        source2 = metadata["sources"]["Source2"]
 
-        # When/Then
-        for source_name, expected_type in test_cases:
-            source_type = determine_source_type(source_name)
-            assert source_type == expected_type, (
-                f"Expected '{expected_type}' for {source_name}, got {source_type}"
-            )
+        assert source1["position"]["x"] == 100
+        assert source1["position"]["y"] == 200
+        assert source2["position"]["x"] == 300
+        assert source2["position"]["y"] == 400
 
-    def test_source_type_with_special_characters(self):
-        """Test source type detection with special characters and numbers."""
-        # Given
-        test_cases = [
-            ("Camera #1", "video"),
-            ("Mikrofon (USB)", "audio"),
-            ("Video-Capture_Device", "video"),
-            ("Audio.Input.Source", "audio"),
-            ("Webcam 2.0", "video"),
-        ]
+    def test_create_metadata_invalid_canvas_size(self):
+        """Test metadata creation with invalid canvas size."""
+        sources = [{"name": "Source1", "x": 0, "y": 0}]
 
-        # When/Then
-        for source_name, expected_type in test_cases:
-            source_type = determine_source_type(source_name)
-            assert source_type == expected_type, (
-                f"Expected '{expected_type}' for {source_name}, got {source_type}"
-            )
+        try:
+            create_metadata(sources, canvas_size=(0, 1080))
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Canvas size must be positive" in str(e)
+
+    def test_create_metadata_negative_position(self):
+        """Test metadata creation with negative source position."""
+        sources = [{"name": "Source1", "x": -100, "y": 0}]
+
+        try:
+            create_metadata(sources)
+            assert False, "Should have raised ValueError"
+        except ValueError as e:
+            assert "Source position cannot be negative" in str(e)
+
+    def test_create_metadata_timestamp_is_recent(self):
+        """Test that timestamp is set to current time."""
+        sources = [{"name": "Source1", "x": 0, "y": 0}]
+
+        before_time = time.time()
+        metadata = create_metadata(sources)
+        after_time = time.time()
+
+        assert before_time <= metadata["timestamp"] <= after_time
+
+
+class TestMetadataValidation:
+    """Test metadata validation functionality."""
+
+    def test_validate_metadata_valid(self):
+        """Test validation of valid metadata."""
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": {
+                "Camera": {
+                    "has_audio": True,
+                    "has_video": True,
+                    "position": {"x": 0, "y": 0},
+                }
+            },
+            "fps": 30.0,
+            "timestamp": time.time(),
+        }
+
+        assert validate_metadata(metadata) is True
+
+    def test_validate_metadata_missing_fields(self):
+        """Test validation fails with missing required fields."""
+        metadata = {"canvas_size": [1920, 1080], "sources": {}}
+
+        assert validate_metadata(metadata) is False
+
+    def test_validate_metadata_invalid_canvas_size(self):
+        """Test validation fails with invalid canvas size."""
+        metadata = {
+            "canvas_size": [0, 1080],
+            "sources": {},
+            "fps": 30.0,
+            "timestamp": time.time(),
+        }
+
+        assert validate_metadata(metadata) is False
+
+    def test_validate_metadata_invalid_fps(self):
+        """Test validation fails with invalid FPS."""
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": {},
+            "fps": -30.0,
+            "timestamp": time.time(),
+        }
+
+        assert validate_metadata(metadata) is False
+
+    def test_validate_metadata_invalid_sources(self):
+        """Test validation fails with invalid sources format."""
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": [],  # Should be dict, not list
+            "fps": 30.0,
+            "timestamp": time.time(),
+        }
+
+        assert validate_metadata(metadata) is False
 
 
 class TestMetadataIntegration:
-    """Test cases for metadata integration with other components."""
+    """Integration tests for metadata functionality."""
 
-    def test_metadata_with_types_validates_correctly(self):
-        """Test that metadata with source types passes validation."""
-        # Given
+    def test_metadata_json_serialization(self):
+        """Test that metadata can be serialized to JSON."""
         sources = [
-            {
-                "name": "Urządzenie przechwytujące obraz (V4L2)",
-                "x": 0,
-                "y": 0,
-                "width": 640,
-                "height": 360,
-            },
-            {
-                "name": "Przechwytywanie wejścia dźwięku (PulseAudio)",
-                "x": 0,
-                "y": 0,
-                "width": 0,
-                "height": 0,
-            },
+            {"name": "Camera", "x": 0, "y": 0},
+            {"name": "Microphone", "x": 100, "y": 100},
         ]
-        canvas_size = (1280, 720)
 
-        # When
-        metadata = create_metadata(sources, canvas_size=canvas_size)
+        metadata = create_metadata(sources)
 
-        # Then
-        assert validate_metadata(metadata) is True
+        # Should be able to serialize to JSON
+        json_str = json.dumps(metadata)
+        assert json_str is not None
 
-        # Verify types are included
-        for source_name, source_data in metadata["sources"].items():
-            assert "type" in source_data
-            assert source_data["type"] in ["video", "audio", "unknown"]
-
-    def test_metadata_roundtrip_preserves_types(self):
-        """Test that metadata types are preserved through JSON serialization."""
-        # Given
-        import json
-
-        sources = [
-            {"name": "Camera", "x": 0, "y": 0, "width": 1920, "height": 1080},
-            {"name": "Microphone", "x": 0, "y": 0, "width": 0, "height": 0},
-        ]
-        canvas_size = (1920, 1080)
-
-        # When
-        original_metadata = create_metadata(sources, canvas_size=canvas_size)
-        json_str = json.dumps(original_metadata)
+        # Should be able to deserialize from JSON
         restored_metadata = json.loads(json_str)
-
-        # Then
-        assert restored_metadata["sources"]["Camera"]["type"] == "video"
-        assert restored_metadata["sources"]["Microphone"]["type"] == "audio"
         assert validate_metadata(restored_metadata) is True
+
+    def test_metadata_roundtrip_preserves_capabilities(self):
+        """Test that JSON roundtrip preserves source capabilities."""
+        sources = [{"name": "Camera", "x": 0, "y": 0, "obs_source": Mock()}]
+
+        with patch("src.core.metadata.determine_source_capabilities") as mock_caps:
+            mock_caps.return_value = {"has_audio": True, "has_video": True}
+
+            metadata = create_metadata(sources)
+
+            # Serialize and deserialize
+            json_str = json.dumps(metadata)
+            restored_metadata = json.loads(json_str)
+
+            # Check that capabilities are preserved
+            camera = restored_metadata["sources"]["Camera"]
+            assert camera["has_audio"] is True
+            assert camera["has_video"] is True
+            assert validate_metadata(restored_metadata) is True

@@ -3,85 +3,39 @@ Metadata management for OBS Canvas Recording.
 This module handles creation and manipulation of recording metadata.
 """
 
-import re
 import time
 from typing import Dict, List, Tuple, Any
 
+try:
+    import obs
+except ImportError:
+    # Mock for testing
+    obs = None
 
-def determine_source_type(source_name: str) -> str:
+
+def determine_source_capabilities(obs_source) -> Dict[str, bool]:
     """
-    Determine the type of OBS source based on its name.
+    Determine source capabilities using OBS API.
 
     Args:
-        source_name: Name of the OBS source
+        obs_source: OBS source object
 
     Returns:
-        Source type: "video", "audio", or "unknown"
+        Dictionary with has_audio and has_video flags
     """
-    if not source_name:
-        return "unknown"
+    if obs_source is None or obs is None:
+        return {"has_audio": False, "has_video": False}
 
-    # Convert to lowercase for case-insensitive matching
-    name_lower = source_name.lower()
+    flags = obs.obs_source_get_output_flags(obs_source)
 
-    # Audio source patterns - check these first as they're more specific
-    audio_patterns = [
-        # Audio input/output with specific keywords
-        r"(audio|dźwięk|dzwiek)",
-        r"(microphone|mikrofon|mic)",
-        r"(pulse|pulseaudio)",
-        r"(alsa)",
-        r"(speaker|głośnik|glosnik)",
-        r"(headphone|słuchawki|sluchawki)",
-        r"(sound|dźwięk|dzwiek)",
-        r"(wejścia.*dźwięku|wejscia.*dzwieku)",
-        r"(desktop.*audio|pulpit.*dźwięk)",
-        # More specific patterns to avoid conflicts
-        r"(.*audio.*input|.*audio.*output)",
-        r"(.*dźwięk.*input|.*dźwięk.*output)",
-        r"(.*wejścia.*dźwięku|.*wejscia.*dzwieku)",
-    ]
+    # OBS source flags constants
+    OBS_SOURCE_VIDEO = 0x001
+    OBS_SOURCE_AUDIO = 0x002
 
-    # Video source patterns
-    video_patterns = [
-        # Camera/Video capture - more specific patterns
-        r"(camera|kamera|webcam|cam)",
-        r"(video|wideo)",
-        r"(v4l2|video4linux)",
-        r"(display|desktop|pulpit|ekran)",
-        r"(window|okno)",
-        r"(browser|przeglądarka)",
-        r"(media|multimedia)",
-        r"(image|zdjęcie)",
-        r"(color|kolor|colour)",
-        r"(text|tekst|gdi)",
-        r"(vlc|video.*source)",
-        r"(screen|monitor)",
-        r"(game|gra)",
-        r"(source.*video)",
-        # More specific video capture patterns
-        r"(urządzenie.*obraz)",
-        r"(przechwytuj.*obraz)",
-        r"(capture.*video)",
-        r"(video.*capture)",
-    ]
-
-    # Check audio patterns first (more specific)
-    for pattern in audio_patterns:
-        if re.search(pattern, name_lower):
-            return "audio"
-
-    # Check video patterns second
-    for pattern in video_patterns:
-        if re.search(pattern, name_lower):
-            return "video"
-
-    # Special case: if contains "input" or "output" but not matched above, likely audio
-    if re.search(r"(input|output|wejście|wyjście|wejscie|wyjscie)", name_lower):
-        return "audio"
-
-    # If no pattern matches, return unknown
-    return "unknown"
+    return {
+        "has_audio": bool(flags & OBS_SOURCE_AUDIO),
+        "has_video": bool(flags & OBS_SOURCE_VIDEO),
+    }
 
 
 def create_metadata(
@@ -122,8 +76,13 @@ def create_metadata(
         if "x" in source and "y" in source:
             source_data["position"] = {"x": source["x"], "y": source["y"]}
 
-        # Add source type detection
-        source_data["type"] = determine_source_type(source_id)
+        # Add source capabilities detection
+        obs_source = source.get("obs_source")
+        capabilities = determine_source_capabilities(obs_source)
+        source_data.update(capabilities)
+
+        # Remove obs_source from final metadata (not serializable)
+        source_data.pop("obs_source", None)
 
         sources_dict[source_id] = source_data
 

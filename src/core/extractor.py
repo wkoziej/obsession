@@ -106,6 +106,86 @@ def calculate_crop_params(
     return {"x": crop_x, "y": crop_y, "width": crop_width, "height": crop_height}
 
 
+def _get_ffmpeg_base_cmd(input_file: str) -> List[str]:
+    """
+    Get base FFmpeg command.
+
+    Args:
+        input_file: Path to input video file
+
+    Returns:
+        Base FFmpeg command as list of strings
+    """
+    return ["ffmpeg", "-i", str(input_file)]
+
+
+def _extract_video_source(
+    input_file: str,
+    output_file: Path,
+    source_info: Dict[str, Any],
+    canvas_size: List[int],
+) -> None:
+    """
+    Extract video from source using FFmpeg.
+
+    Args:
+        input_file: Path to input video file
+        output_file: Path to output video file
+        source_info: Source information with position data
+        canvas_size: Canvas dimensions
+
+    Raises:
+        subprocess.CalledProcessError: If FFmpeg command fails
+        FileNotFoundError: If FFmpeg is not found
+    """
+    # Calculate crop parameters
+    crop_params = calculate_crop_params(source_info, canvas_size)
+    crop_filter = f"crop={crop_params['width']}:{crop_params['height']}:{crop_params['x']}:{crop_params['y']}"
+
+    # Build FFmpeg command for video extraction
+    cmd = _get_ffmpeg_base_cmd(input_file) + [
+        "-filter:v",
+        crop_filter,
+        "-c:v",
+        "libx264",
+        "-crf",
+        "23",
+        "-preset",
+        "fast",
+        "-an",  # No audio in video files
+        "-y",
+        str(output_file),
+    ]
+
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
+def _extract_audio_source(input_file: str, output_file: Path) -> None:
+    """
+    Extract audio from source using FFmpeg.
+
+    Args:
+        input_file: Path to input video file
+        output_file: Path to output audio file
+
+    Raises:
+        subprocess.CalledProcessError: If FFmpeg command fails
+        FileNotFoundError: If FFmpeg is not found
+    """
+    # Build FFmpeg command for audio extraction
+    cmd = _get_ffmpeg_base_cmd(input_file) + [
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-vn",  # No video in audio files
+        "-y",
+        str(output_file),
+    ]
+
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+
 def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResult:
     """
     Extract individual sources from canvas recording.
@@ -159,50 +239,83 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
 
     # Get canvas size for crop calculations
     canvas_size = metadata.get("canvas_size", [1920, 1080])
-
     extracted_files = []
 
-    # Extract each source using FFmpeg
+    # Process each source based on its capabilities
     for source_name, source_info in sources.items():
-        # Sanitize source name for safe filename
+        has_audio = source_info.get("has_audio", False)
+        has_video = source_info.get("has_video", False)
+
+        # Skip sources without audio or video
+        if not has_audio and not has_video:
+            continue
+
         safe_source_name = sanitize_filename(source_name)
-        output_file = output_dir / f"{safe_source_name}.mp4"
 
-        # Calculate crop parameters
-        crop_params = calculate_crop_params(source_info, canvas_size)
+        # Extract video if source has video
+        if has_video:
+            video_output_file = output_dir / f"{safe_source_name}.mp4"
 
-        # Build FFmpeg command
-        crop_filter = f"crop={crop_params['width']}:{crop_params['height']}:{crop_params['x']}:{crop_params['y']}"
+            try:
+                _extract_video_source(
+                    video_file, video_output_file, source_info, canvas_size
+                )
+                extracted_files.append(str(video_output_file))
+            except subprocess.CalledProcessError as e:
+                return ExtractionResult(
+                    success=False,
+                    error_message=f"FFmpeg failed to extract video from {source_name}: {e.stderr}",
+                )
+            except FileNotFoundError:
+                return ExtractionResult(
+                    success=False,
+                    error_message="FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.",
+                )
 
-        cmd = [
-            "ffmpeg",
-            "-i",
-            str(video_file),
-            "-filter:v",
-            crop_filter,
-            "-c:v",
-            "libx264",
-            "-crf",
-            "23",
-            "-preset",
-            "fast",
-            "-y",  # Overwrite output files
-            str(output_file),
-        ]
+        # Extract audio if source has audio
+        if has_audio:
+            audio_output_file = output_dir / f"{safe_source_name}.m4a"
 
-        try:
-            # Execute FFmpeg command
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
-            extracted_files.append(str(output_file))
-        except subprocess.CalledProcessError as e:
-            return ExtractionResult(
-                success=False,
-                error_message=f"FFmpeg failed to extract {source_name}: {e.stderr}",
-            )
-        except FileNotFoundError:
-            return ExtractionResult(
-                success=False,
-                error_message="FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.",
-            )
+            try:
+                _extract_audio_source(video_file, audio_output_file)
+                extracted_files.append(str(audio_output_file))
+            except subprocess.CalledProcessError as e:
+                return ExtractionResult(
+                    success=False,
+                    error_message=f"FFmpeg failed to extract audio from {source_name}: {e.stderr}",
+                )
+            except FileNotFoundError:
+                return ExtractionResult(
+                    success=False,
+                    error_message="FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.",
+                )
 
     return ExtractionResult(success=True, extracted_files=extracted_files)
+
+
+class SourceExtractor:
+    """
+    Extractor for individual sources from canvas recording.
+    """
+
+    def __init__(self, input_file: str, metadata: Dict[str, Any], output_dir: str):
+        """
+        Initialize SourceExtractor.
+
+        Args:
+            input_file: Path to the input video file
+            metadata: Recording metadata containing source information
+            output_dir: Directory to save extracted files
+        """
+        self.input_file = input_file
+        self.metadata = metadata
+        self.output_dir = output_dir
+
+    def extract_sources(self) -> ExtractionResult:
+        """
+        Extract sources using the standalone function.
+
+        Returns:
+            ExtractionResult with success status and extracted files
+        """
+        return extract_sources(self.input_file, self.metadata)

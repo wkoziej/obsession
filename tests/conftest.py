@@ -179,7 +179,12 @@ def single_source_metadata():
     return {
         "canvas_size": [1920, 1080],
         "sources": {
-            "Camera1": {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}}
+            "Camera1": {
+                "position": {"x": 0, "y": 0},
+                "scale": {"x": 1.0, "y": 1.0},
+                "has_audio": True,
+                "has_video": True,
+            }
         },
     }
 
@@ -190,8 +195,18 @@ def dual_source_metadata():
     return {
         "canvas_size": [3840, 1080],
         "sources": {
-            "Camera1": {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}},
-            "Camera2": {"position": {"x": 1920, "y": 0}, "scale": {"x": 1.0, "y": 1.0}},
+            "Camera1": {
+                "position": {"x": 0, "y": 0},
+                "scale": {"x": 1.0, "y": 1.0},
+                "has_audio": True,
+                "has_video": True,
+            },
+            "Camera2": {
+                "position": {"x": 1920, "y": 0},
+                "scale": {"x": 1.0, "y": 1.0},
+                "has_audio": True,
+                "has_video": True,
+            },
         },
     }
 
