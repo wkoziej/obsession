@@ -162,7 +162,7 @@ class TestOBSScript:
             mock_print.assert_called_with("[Canvas Recorder] No scene data prepared")
 
     def test_collect_and_save_metadata_with_sources(
-        self, mock_obs_functions, mock_obs_scene, mock_obs_source
+        self, mock_obs_functions, mock_obs_scene, mock_obs_source, mock_obs_scene_item
     ):
         """Test collect metadata with scene sources."""
         # Setup scene data
@@ -176,9 +176,30 @@ class TestOBSScript:
 
         # Setup mock returns
         mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_scene_from_source.return_value = mock_obs_scene
+
+        # Mock obs_scene_enum_items to return a list of scene items
+        mock_obs_functions.obs_scene_enum_items.return_value = [mock_obs_scene_item]
+
+        # Mock scene item functions
         mock_obs_functions.obs_sceneitem_get_source.return_value = mock_obs_source
         mock_obs_functions.obs_source_get_name.return_value = "Camera1"
         mock_obs_functions.obs_source_get_id.return_value = "camera_source"
+        mock_obs_functions.obs_source_get_width.return_value = 1920
+        mock_obs_functions.obs_source_get_height.return_value = 1080
+        mock_obs_functions.obs_sceneitem_visible.return_value = True
+
+        # Mock vec2 objects for position and scale
+        mock_pos = Mock()
+        mock_pos.x = 100
+        mock_pos.y = 50
+        mock_scale = Mock()
+        mock_scale.x = 1.0
+        mock_scale.y = 1.0
+        mock_obs_functions.vec2.return_value = mock_pos
+
+        # Mock sceneitem_list_release
+        mock_obs_functions.sceneitem_list_release = Mock()
 
         # Mock save function
         with patch("src.obs_integration.obs_script.save_metadata_to_file") as mock_save:
@@ -193,3 +214,7 @@ class TestOBSScript:
             assert saved_metadata["fps"] == 30.0
             assert "recording_stop_time" in saved_metadata
             assert "total_sources" in saved_metadata
+            assert "Camera1" in saved_metadata["sources"]
+
+            # Verify sceneitem_list_release was called
+            mock_obs_functions.sceneitem_list_release.assert_called_once()

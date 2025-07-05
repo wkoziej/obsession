@@ -124,6 +124,7 @@ def mock_obs_functions(mock_obspython):
     obs.obs_data_get_string = Mock(return_value="/tmp/test")
     obs.obs_scene_enum_items = Mock()
     obs.obs_frontend_enum_scenes = Mock()
+    obs.sceneitem_list_release = Mock()
 
     # Source-related functions
     obs.obs_sceneitem_get_source = Mock(return_value=Mock())
