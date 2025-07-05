@@ -3,7 +3,7 @@
 ## 📋 Status Overview
 - **Faza**: POC (Proof of Concept)
 - **Okres**: 7 dni
-- **Postęp**: 17/29 zadań ukończonych (59%)
+- **Postęp**: 18/29 zadań ukończonych (62%)
 - **Ostatnia aktualizacja**: 2024-01-15
 
 ## 🗓️ Dzień 1: Setup projektu (4/4 ukończone) ✅
@@ -56,10 +56,10 @@
 - [x] **OBS-009**: Zapisywanie JSON do pliku <!-- 2024-01-15 -->
   - Path resolution i file I/O
 
-## 🗓️ Dzień 5: Extractor struktura (0/4 ukończone)
+## 🗓️ Dzień 5: Extractor struktura (1/4 ukończone)
 
 ### Podstawowy ekstraktor
-- [ ] **EXT-001**: Stworzenie `ExtractionResult` class
+- [x] **EXT-001**: Stworzenie `ExtractionResult` class <!-- 2024-01-15 -->
   - Data structure dla wyników ekstrakcji
 - [ ] **EXT-002**: Test `extract_single_source()` - RED phase
   - Podstawowy test case z mock danymi
@@ -124,7 +124,7 @@
 - **Środowisko**: 4/4 (100%) ✅
 - **Metadata**: 4/4 (100%) ✅
 - **OBS Integration**: 9/9 (100%) ✅
-- **Extractor**: 0/8 (0%)
+- **Extractor**: 1/8 (12%)
 - **CLI**: 0/4 (0%)
 
 ## 🚨 Ryzyka i blokery
