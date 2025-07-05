@@ -136,8 +136,7 @@ class TestOBSScript:
             # Verify file was created
             files = os.listdir(temp_dir)
             assert len(files) == 1
-            assert files[0].startswith("metadata_Test_Scene_")
-            assert files[0].endswith(".json")
+            assert files[0].endswith("_metadata.json")
 
             # Verify file content
             with open(os.path.join(temp_dir, files[0]), "r") as f:
