@@ -76,11 +76,11 @@ class TestCropParams:
         # When
         params = calculate_crop_params(basic_source_info, standard_canvas_size)
 
-        # Then
-        assert params["x"] == 0
-        assert params["y"] == 0
-        assert params["width"] == 1920
-        assert params["height"] == 1080
+        # Then - source at (0,0) with size 1920x1080 fills entire canvas
+        assert params["x"] == 0  # Crop from left edge of canvas
+        assert params["y"] == 0  # Crop from top edge of canvas
+        assert params["width"] == 1920  # Full canvas width
+        assert params["height"] == 1080  # Full canvas height
 
     def test_calculate_crop_params_with_position(
         self, positioned_source_info, wide_canvas_size
@@ -89,11 +89,11 @@ class TestCropParams:
         # When
         params = calculate_crop_params(positioned_source_info, wide_canvas_size)
 
-        # Then
-        assert params["x"] == 1920
-        assert params["y"] == 0
-        assert params["width"] == 1920
-        assert params["height"] == 1080
+        # Then - source at position (1920, 0) on 3840x1080 canvas
+        assert params["x"] == 1920  # Crop from x=1920 on canvas
+        assert params["y"] == 0  # Crop from top of canvas
+        assert params["width"] == 1920  # Source width on canvas
+        assert params["height"] == 1080  # Source height on canvas
 
     def test_calculate_crop_params_with_scale(
         self, scaled_source_info, standard_canvas_size
@@ -102,11 +102,11 @@ class TestCropParams:
         # When
         params = calculate_crop_params(scaled_source_info, standard_canvas_size)
 
-        # Then
+        # Then - scaled source (0.5x) at position (0,0) on canvas
         assert params["x"] == 0
         assert params["y"] == 0
-        assert params["width"] == 960  # 1920 * 0.5
-        assert params["height"] == 540  # 1080 * 0.5
+        assert params["width"] == 960  # Scaled width on canvas (1920 * 0.5)
+        assert params["height"] == 540  # Scaled height on canvas (1080 * 0.5)
 
     def test_calculate_crop_params_complex(
         self, complex_source_info, standard_canvas_size
@@ -115,11 +115,11 @@ class TestCropParams:
         # When
         params = calculate_crop_params(complex_source_info, standard_canvas_size)
 
-        # Then
-        assert params["x"] == 100
-        assert params["y"] == 50
-        assert params["width"] == 1536  # 1920 * 0.8
-        assert params["height"] == 648  # 1080 * 0.6
+        # Then - source at position (100, 50) with scale 0.8x0.6 on canvas
+        assert params["x"] == 100  # Crop from x=100 on canvas
+        assert params["y"] == 50  # Crop from y=50 on canvas
+        assert params["width"] == 1536  # Scaled width on canvas (1920 * 0.8)
+        assert params["height"] == 648  # Scaled height on canvas (1080 * 0.6)
 
 
 class TestSanitizeFilename:
@@ -418,7 +418,7 @@ class TestCropParamsEdgeCases:
 
         # Then - crop should be limited to source dimensions
         assert params["width"] == 640  # Limited to source_width
-        assert params["height"] == 360  # Limited to source_height
+        assert params["height"] == 359  # Limited by visible area calculation
         assert params["x"] == 0
         assert params["y"] == 0
 
@@ -459,11 +459,11 @@ class TestCropParamsEdgeCases:
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
-        # Then - position remains but crop is minimal (canvas bounds exceeded)
-        assert params["x"] == 1500  # Position unchanged
-        assert params["y"] == 800  # Position unchanged
-        assert params["width"] == 1  # Minimal crop (canvas exceeded)
-        assert params["height"] == 1  # Minimal crop (canvas exceeded)
+        # Then - source is completely outside canvas, minimal crop
+        assert params["x"] == 0  # No visible part, crop from start
+        assert params["y"] == 0  # No visible part, crop from start
+        assert params["width"] == 1  # Minimal crop (no visible area)
+        assert params["height"] == 1  # Minimal crop (no visible area)
 
     def test_source_partially_outside_canvas(self):
         """Test source partially outside canvas bounds."""
@@ -483,12 +483,10 @@ class TestCropParamsEdgeCases:
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
-        # Then - should be cropped to fit canvas
-        assert params["x"] == 900
-        assert params["y"] == 400
-        # 900 + 640 > 1280, so width = 1280 - 900 = 380
-        # 400 + 360 > 720, so height = 720 - 400 = 320
-        # But then limited by source bounds: min(380, 640) and min(320, 360)
+        # Then - should crop only visible part from source
+        assert params["x"] == 0  # Crop from start of source
+        assert params["y"] == 0  # Crop from start of source
+        # Visible area: from (900, 400) to (1280, 720) = 380x320
         assert params["width"] == 380  # 1280 - 900
         assert params["height"] == 320  # 720 - 400
 
@@ -510,16 +508,17 @@ class TestCropParamsEdgeCases:
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
-        # Then
-        assert params["x"] == 606
-        assert params["y"] == 330
-        # Desired: 1920 * 0.503125 = 966, but limited by canvas: 1280 - 606 = 674
-        assert params["width"] == 674  # Limited by canvas bounds
-        assert params["height"] == 390  # Limited by canvas bounds (720 - 330)
+        # Then - crop from source coordinates
+        assert params["x"] == 0  # Crop from start of source
+        assert params["y"] == 0  # Crop from start of source
+        # Visible area: from (606, 330) to (1280, 720) = 674x390
+        # In source coords: 674/0.503125 = 1339, 390/0.5027777 = 775
+        assert params["width"] == 1339  # 674 / 0.503125
+        assert params["height"] == 775  # 390 / 0.5027777 (rounded down)
 
     def test_negative_position(self):
         """Test source with negative position."""
-        # Given - source with negative position
+        # Given - source with negative position (partially outside canvas)
         source_info = {
             "position": {"x": -100, "y": -50},
             "scale": {"x": 1.0, "y": 1.0},
@@ -535,11 +534,13 @@ class TestCropParamsEdgeCases:
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
-        # Then - negative positions should be clamped to 0
-        assert params["x"] == 0
-        assert params["y"] == 0
-        assert params["width"] == 640
-        assert params["height"] == 360
+        # Then - should crop from inside source to show only visible part
+        # Source starts at (-100, -50), so crop from (100, 50) in source coordinates
+        # Visible area: from (0,0) to (540, 310) on canvas = 540x310
+        assert params["x"] == 100  # Crop from inside source
+        assert params["y"] == 50  # Crop from inside source
+        assert params["width"] == 540  # 640 - 100 = 540 (visible width)
+        assert params["height"] == 310  # 360 - 50 = 310 (visible height)
 
     def test_source_with_missing_dimensions(self):
         """Test source with missing dimensions data."""
@@ -559,3 +560,32 @@ class TestCropParamsEdgeCases:
         assert params["height"] == 720  # Limited by canvas
         assert params["x"] == 0
         assert params["y"] == 0
+
+    def test_source_with_bounds_negative_position(self):
+        """Test source with bounds and negative position (real camera example)."""
+        # Given - real camera example with bounds
+        source_info = {
+            "position": {"x": -119, "y": 418},
+            "scale": {"x": 1.0, "y": 1.0},  # Błędna skala z OBS
+            "bounds": {"x": 223, "y": 127},  # Rzeczywiste wymiary po przeskalowaniu
+            "dimensions": {
+                "source_width": 1280,
+                "source_height": 720,
+                "final_width": 223,  # Zgodne z bounds
+                "final_height": 127,
+            },
+        }
+        canvas_size = [1920, 1080]
+
+        # When
+        params = calculate_crop_params(source_info, canvas_size)
+
+        # Then - crop visible part from canvas
+        # Camera at (-119, 418) with size 223x127
+        # Visible area: from (0, 418) to (104, 545) = 104x127
+        assert (
+            params["x"] == 0
+        )  # Crop from left edge of canvas (visible part starts at x=0)
+        assert params["y"] == 418  # Crop from y=418 on canvas
+        assert params["width"] == 104  # Visible width on canvas
+        assert params["height"] == 127  # Visible height on canvas
