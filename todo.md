@@ -3,7 +3,7 @@
 ## 📋 Status Overview
 - **Faza**: POC (Proof of Concept)
 - **Okres**: 7 dni
-- **Postęp**: 21/29 zadań ukończonych (72%)
+- **Postęp**: 22/29 zadań ukończonych (76%)
 - **Ostatnia aktualizacja**: 2024-01-15
 
 ## 🗓️ Dzień 1: Setup projektu (4/4 ukończone) ✅
@@ -68,10 +68,10 @@
 - [x] **EXT-004**: Testy walidacji input <!-- 2024-01-15 -->
   - File existence, metadata validation
 
-## 🗓️ Dzień 6: FFmpeg integration (0/4 ukończone)
+## 🗓️ Dzień 6: FFmpeg integration (1/4 ukończone)
 
 ### Prawdziwa ekstrakcja wideo
-- [ ] **EXT-005**: Implementacja FFmpeg crop logic
+- [x] **EXT-005**: Implementacja FFmpeg crop logic <!-- 2024-01-15 -->
   - Obliczanie parametrów crop z metadata
 - [ ] **EXT-006**: Subprocess integration
   - Wywołanie FFmpeg z proper error handling
@@ -124,7 +124,7 @@
 - **Środowisko**: 4/4 (100%) ✅
 - **Metadata**: 4/4 (100%) ✅
 - **OBS Integration**: 9/9 (100%) ✅
-- **Extractor**: 4/8 (50%)
+- **Extractor**: 5/8 (62%)
 - **CLI**: 0/4 (0%)
 
 ## 🚨 Ryzyka i blokery

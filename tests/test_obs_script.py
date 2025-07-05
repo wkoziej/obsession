@@ -1,47 +1,14 @@
 """
 Test module for OBS script functionality.
-Since obspython is not available in test environment, we mock it.
+Using shared OBS fixtures from conftest.py to avoid duplication.
 """
 
 import json
 import os
 import tempfile
 from unittest.mock import Mock, patch
-import sys
 
-# Mock obspython module
-mock_obs = Mock()
-mock_obs.OBS_FRONTEND_EVENT_RECORDING_STARTED = 1
-mock_obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED = 2
-mock_obs.OBS_PATH_DIRECTORY = "directory"
-mock_obs.OBS_TEXT_INFO = "info"
-
-
-# Mock vec2 class
-class MockVec2:
-    def __init__(self):
-        self.x = 0.0
-        self.y = 0.0
-
-
-mock_obs.vec2 = MockVec2
-
-
-# Mock video info class
-class MockVideoInfo:
-    def __init__(self):
-        self.base_width = 1920
-        self.base_height = 1080
-        self.fps_num = 30
-        self.fps_den = 1
-
-
-mock_obs.obs_video_info = MockVideoInfo
-
-# Add mock to sys.modules before importing our module
-sys.modules["obspython"] = mock_obs
-
-# Import our module after mocking
+# Import our module - obspython mock is handled by conftest.py
 from src.obs_integration.obs_script import (
     script_description,
     script_load,
@@ -63,32 +30,25 @@ class TestOBSScript:
         assert "<h2>" in description
         assert "<p>" in description
 
-    def test_script_load_with_mock_obs(self):
+    def test_script_load_with_mock_obs(self, mock_obs_functions):
         """Test script load functionality."""
         mock_settings = Mock()
-
-        # Mock OBS functions
-        mock_obs.obs_frontend_add_event_callback = Mock()
-        mock_obs.obs_data_get_bool = Mock(return_value=True)
-        mock_obs.obs_data_get_string = Mock(return_value="/tmp/test")
 
         # Call script_load
         script_load(mock_settings)
 
         # Verify callback was registered
-        mock_obs.obs_frontend_add_event_callback.assert_called_once()
+        mock_obs_functions.obs_frontend_add_event_callback.assert_called_once()
 
-    def test_script_unload_with_mock_obs(self):
+    def test_script_unload_with_mock_obs(self, mock_obs_functions):
         """Test script unload functionality."""
-        mock_obs.obs_frontend_remove_event_callback = Mock()
-
         # Call script_unload
         script_unload()
 
         # Verify callback was removed
-        mock_obs.obs_frontend_remove_event_callback.assert_called_once()
+        mock_obs_functions.obs_frontend_remove_event_callback.assert_called_once()
 
-    def test_on_event_recording_started(self):
+    def test_on_event_recording_started(self, mock_obspython):
         """Test event handler for recording started."""
         with patch(
             "src.obs_integration.obs_script.prepare_metadata_collection"
@@ -99,12 +59,12 @@ class TestOBSScript:
             script_module.script_enabled = True
 
             # Call event handler
-            on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STARTED)
+            on_event(mock_obspython.OBS_FRONTEND_EVENT_RECORDING_STARTED)
 
             # Verify prepare was called
             mock_prepare.assert_called_once()
 
-    def test_on_event_recording_stopped(self):
+    def test_on_event_recording_stopped(self, mock_obspython):
         """Test event handler for recording stopped."""
         with patch(
             "src.obs_integration.obs_script.collect_and_save_metadata"
@@ -115,12 +75,12 @@ class TestOBSScript:
             script_module.script_enabled = True
 
             # Call event handler
-            on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STOPPED)
+            on_event(mock_obspython.OBS_FRONTEND_EVENT_RECORDING_STOPPED)
 
             # Verify collect was called
             mock_collect.assert_called_once()
 
-    def test_on_event_script_disabled(self):
+    def test_on_event_script_disabled(self, mock_obspython):
         """Test event handler when script is disabled."""
         with patch(
             "src.obs_integration.obs_script.prepare_metadata_collection"
@@ -131,28 +91,25 @@ class TestOBSScript:
             script_module.script_enabled = False
 
             # Call event handler
-            on_event(mock_obs.OBS_FRONTEND_EVENT_RECORDING_STARTED)
+            on_event(mock_obspython.OBS_FRONTEND_EVENT_RECORDING_STARTED)
 
             # Verify prepare was NOT called
             mock_prepare.assert_not_called()
 
-    def test_prepare_metadata_collection(self):
+    def test_prepare_metadata_collection(self, mock_obs_functions, mock_obs_scene):
         """Test metadata preparation."""
-        # Mock OBS functions
-        mock_scene = Mock()
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene)
-        mock_obs.obs_source_get_name = Mock(return_value="Test Scene")
-        mock_obs.obs_source_release = Mock()
-        mock_obs.obs_get_video_info = Mock()
+        # Setup specific mock returns
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_source_get_name.return_value = "Test Scene"
 
         # Call prepare_metadata_collection
         prepare_metadata_collection()
 
         # Verify OBS functions were called
-        mock_obs.obs_frontend_get_current_scene.assert_called_once()
-        mock_obs.obs_source_get_name.assert_called_once_with(mock_scene)
-        mock_obs.obs_source_release.assert_called_once_with(mock_scene)
-        mock_obs.obs_get_video_info.assert_called_once()
+        mock_obs_functions.obs_frontend_get_current_scene.assert_called_once()
+        mock_obs_functions.obs_source_get_name.assert_called_once_with(mock_obs_scene)
+        mock_obs_functions.obs_source_release.assert_called_once_with(mock_obs_scene)
+        mock_obs_functions.obs_get_video_info.assert_called_once()
 
     def test_save_metadata_to_file(self):
         """Test metadata saving to file."""
@@ -204,7 +161,9 @@ class TestOBSScript:
             # Verify error message was printed
             mock_print.assert_called_with("[Canvas Recorder] No scene data prepared")
 
-    def test_collect_and_save_metadata_with_sources(self):
+    def test_collect_and_save_metadata_with_sources(
+        self, mock_obs_functions, mock_obs_scene, mock_obs_source
+    ):
         """Test collect metadata with scene sources."""
         # Setup scene data
         import src.obs_integration.obs_script as script_module
@@ -215,26 +174,11 @@ class TestOBSScript:
             "scene_name": "Test Scene",
         }
 
-        # Mock scene and sources
-        mock_scene = Mock()
-
-        mock_source = Mock()
-
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene)
-        mock_obs.obs_source_release = Mock()
-        mock_obs.obs_scene_enum_items = Mock()
-
-        # Mock source properties
-        mock_obs.obs_sceneitem_get_source = Mock(return_value=mock_source)
-        mock_obs.obs_source_get_name = Mock(return_value="Camera1")
-        mock_obs.obs_source_get_id = Mock(return_value="camera_source")
-        mock_obs.obs_source_get_width = Mock(return_value=1920)
-        mock_obs.obs_source_get_height = Mock(return_value=1080)
-        mock_obs.obs_sceneitem_visible = Mock(return_value=True)
-
-        # Mock position and scale
-        mock_obs.obs_sceneitem_get_pos = Mock()
-        mock_obs.obs_sceneitem_get_scale = Mock()
+        # Setup mock returns
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_sceneitem_get_source.return_value = mock_obs_source
+        mock_obs_functions.obs_source_get_name.return_value = "Camera1"
+        mock_obs_functions.obs_source_get_id.return_value = "camera_source"
 
         # Mock save function
         with patch("src.obs_integration.obs_script.save_metadata_to_file") as mock_save:

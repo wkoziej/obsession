@@ -1,58 +1,14 @@
 """
 Test module for scene analyzer functionality.
-Since obspython is not available in test environment, we mock it.
+Using shared OBS fixtures from conftest.py to avoid duplication.
 """
 
 import json
 import os
 import tempfile
 from unittest.mock import Mock, patch
-import sys
 
-# Mock obspython module (reuse from previous test)
-mock_obs = Mock()
-
-
-# Mock vec2 class
-class MockVec2:
-    def __init__(self):
-        self.x = 0.0
-        self.y = 0.0
-
-
-mock_obs.vec2 = MockVec2
-
-
-# Mock video info class
-class MockVideoInfo:
-    def __init__(self):
-        self.base_width = 1920
-        self.base_height = 1080
-        self.output_width = 1920
-        self.output_height = 1080
-        self.fps_num = 30
-        self.fps_den = 1
-        self.output_format = 0
-        self.adapter = 0
-        self.gpu_conversion = True
-
-
-mock_obs.obs_video_info = MockVideoInfo
-
-
-# Mock transform info
-class MockTransformInfo:
-    def __init__(self):
-        self.rot = 0.0
-        self.alignment = 0
-        self.bounds_type = 0
-        self.bounds_alignment = 0
-
-
-# Add mock to sys.modules before importing our module
-sys.modules["obspython"] = mock_obs
-
-# Import our module after mocking
+# Import our module - obspython mock is handled by conftest.py
 from src.obs_integration.scene_analyzer import (
     SceneAnalyzer,
     get_current_scene_metadata,
@@ -69,12 +25,9 @@ class TestSceneAnalyzer:
         assert analyzer.current_scene_data == {}
         assert analyzer.video_info is None
 
-    def test_get_video_info(self):
+    def test_get_video_info(self, mock_obs_functions):
         """Test getting video info from OBS."""
         analyzer = SceneAnalyzer()
-
-        # Mock OBS functions
-        mock_obs.obs_get_video_info = Mock()
 
         # Call get_video_info
         video_info = analyzer.get_video_info()
@@ -87,31 +40,29 @@ class TestSceneAnalyzer:
         assert video_info["canvas_size"] == [1920, 1080]
         assert video_info["fps"] == 30.0
 
-    def test_get_current_scene_name(self):
+    def test_get_current_scene_name(self, mock_obs_functions, mock_obs_scene):
         """Test getting current scene name."""
         analyzer = SceneAnalyzer()
 
-        # Mock OBS functions
-        mock_scene = Mock()
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene)
-        mock_obs.obs_source_get_name = Mock(return_value="Test Scene")
-        mock_obs.obs_source_release = Mock()
+        # Setup mock returns
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_source_get_name.return_value = "Test Scene"
 
         # Call get_current_scene_name
         scene_name = analyzer.get_current_scene_name()
 
         # Verify
         assert scene_name == "Test Scene"
-        mock_obs.obs_frontend_get_current_scene.assert_called_once()
-        mock_obs.obs_source_get_name.assert_called_once_with(mock_scene)
-        mock_obs.obs_source_release.assert_called_once_with(mock_scene)
+        mock_obs_functions.obs_frontend_get_current_scene.assert_called_once()
+        mock_obs_functions.obs_source_get_name.assert_called_once_with(mock_obs_scene)
+        mock_obs_functions.obs_source_release.assert_called_once_with(mock_obs_scene)
 
-    def test_get_current_scene_name_no_scene(self):
+    def test_get_current_scene_name_no_scene(self, mock_obs_functions):
         """Test getting current scene name when no scene exists."""
         analyzer = SceneAnalyzer()
 
-        # Mock OBS functions
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=None)
+        # Setup mock to return None
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = None
 
         # Call get_current_scene_name
         scene_name = analyzer.get_current_scene_name()
@@ -119,19 +70,14 @@ class TestSceneAnalyzer:
         # Verify
         assert scene_name is None
 
-    def test_analyze_scene_sources_empty(self):
+    def test_analyze_scene_sources_empty(self, mock_obs_functions, mock_obs_scene):
         """Test analyzing scene with no sources."""
         analyzer = SceneAnalyzer()
 
-        # Mock OBS functions
-        mock_scene_source = Mock()
-        mock_scene = Mock()
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene_source)
-        mock_obs.obs_scene_from_source = Mock(return_value=mock_scene)
-        mock_obs.obs_source_get_name = Mock(return_value="Empty Scene")
-        mock_obs.obs_source_release = Mock()
-        mock_obs.obs_scene_enum_items = Mock()
-        mock_obs.obs_get_video_info = Mock()
+        # Setup mock returns
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_scene_from_source.return_value = Mock()
+        mock_obs_functions.obs_source_get_name.return_value = "Empty Scene"
 
         # Call analyze_scene_sources
         metadata = analyzer.analyze_scene_sources()
@@ -146,46 +92,30 @@ class TestSceneAnalyzer:
         assert metadata["scene_name"] == "Empty Scene"
         assert metadata["total_sources"] == 0
 
-    def test_analyze_scene_sources_with_sources(self):
+    def test_analyze_scene_sources_with_sources(
+        self, mock_obs_functions, mock_obs_scene, mock_obs_source
+    ):
         """Test analyzing scene with sources."""
         analyzer = SceneAnalyzer()
 
-        # Mock scene and sources
-        mock_scene_source = Mock()
-        mock_scene = Mock()
-        mock_source = Mock()
-
-        mock_obs.obs_frontend_get_current_scene = Mock(return_value=mock_scene_source)
-        mock_obs.obs_scene_from_source = Mock(return_value=mock_scene)
-        mock_obs.obs_source_get_name = Mock(return_value="Test Scene")
-        mock_obs.obs_source_release = Mock()
-        mock_obs.obs_get_video_info = Mock()
+        # Setup mock returns
+        mock_obs_functions.obs_frontend_get_current_scene.return_value = mock_obs_scene
+        mock_obs_functions.obs_scene_from_source.return_value = Mock()
+        mock_obs_functions.obs_source_get_name.return_value = "Test Scene"
 
         # Mock source enumeration
         def mock_enum_items(scene, callback, data):
             # Create mock scene item
             mock_scene_item = Mock()
 
-            # Mock source functions
-            mock_obs.obs_sceneitem_get_source = Mock(return_value=mock_source)
-            mock_obs.obs_sceneitem_visible = Mock(return_value=True)
-            mock_obs.obs_source_get_name = Mock(return_value="Camera1")
-            mock_obs.obs_source_get_id = Mock(return_value="camera_source")
-            mock_obs.obs_source_get_type = Mock(return_value=1)
-            mock_obs.obs_source_get_width = Mock(return_value=1920)
-            mock_obs.obs_source_get_height = Mock(return_value=1080)
-            mock_obs.obs_sceneitem_locked = Mock(return_value=False)
-
-            # Mock position and scale
-            mock_obs.obs_sceneitem_get_pos = Mock()
-            mock_obs.obs_sceneitem_get_scale = Mock()
-            mock_obs.obs_sceneitem_get_bounds = Mock()
-            mock_obs.obs_sceneitem_get_info = Mock(return_value=MockTransformInfo())
+            # Setup source function returns
+            mock_obs_functions.obs_sceneitem_get_source.return_value = mock_obs_source
+            mock_obs_functions.obs_source_get_name.return_value = "Camera1"
 
             # Call the callback
             callback(scene, mock_scene_item, data)
 
-        mock_obs.obs_scene_enum_items = Mock(side_effect=mock_enum_items)
+        mock_obs_functions.obs_scene_enum_items.side_effect = mock_enum_items
 
         # Call analyze_scene_sources
         metadata = analyzer.analyze_scene_sources()
@@ -204,7 +134,7 @@ class TestSceneAnalyzer:
         assert "dimensions" in camera_source
         assert camera_source["visible"] is True
 
-    def test_get_scene_list(self):
+    def test_get_scene_list(self, mock_obs_functions):
         """Test getting list of scenes."""
         analyzer = SceneAnalyzer()
 
@@ -214,13 +144,13 @@ class TestSceneAnalyzer:
             mock_scene1 = Mock()
             mock_scene2 = Mock()
 
-            mock_obs.obs_source_get_name = Mock(side_effect=["Scene 1", "Scene 2"])
+            mock_obs_functions.obs_source_get_name.side_effect = ["Scene 1", "Scene 2"]
 
             # Call callback for each scene
             callback(mock_scene1, data)
             callback(mock_scene2, data)
 
-        mock_obs.obs_frontend_enum_scenes = Mock(side_effect=mock_enum_scenes)
+        mock_obs_functions.obs_frontend_enum_scenes.side_effect = mock_enum_scenes
 
         # Call get_scene_list
         scenes = analyzer.get_scene_list()
