@@ -3,7 +3,7 @@ Test module for extractor functionality.
 Following TDD approach - starting with RED phase.
 """
 
-from src.core.extractor import ExtractionResult, extract_sources
+from src.core.extractor import ExtractionResult, extract_sources, calculate_crop_params
 
 
 class TestExtractionResult:
@@ -58,22 +58,69 @@ class TestExtractionResult:
         assert "extracted_files=1" in str_repr
 
 
+class TestCropParams:
+    """Test cases for crop parameter calculation."""
+
+    def test_calculate_crop_params_basic(self, basic_source_info, standard_canvas_size):
+        """Test basic crop parameter calculation."""
+        # When
+        crop_params = calculate_crop_params(basic_source_info, standard_canvas_size)
+
+        # Then
+        assert crop_params["width"] == 1920
+        assert crop_params["height"] == 1080
+        assert crop_params["x"] == 0
+        assert crop_params["y"] == 0
+
+    def test_calculate_crop_params_with_position(
+        self, positioned_source_info, wide_canvas_size
+    ):
+        """Test crop parameters with non-zero position."""
+        # When
+        crop_params = calculate_crop_params(positioned_source_info, wide_canvas_size)
+
+        # Then
+        assert crop_params["width"] == 1920
+        assert crop_params["height"] == 1080
+        assert crop_params["x"] == 1920
+        assert crop_params["y"] == 0
+
+    def test_calculate_crop_params_with_scale(
+        self, scaled_source_info, standard_canvas_size
+    ):
+        """Test crop parameters with scaling."""
+        # When
+        crop_params = calculate_crop_params(scaled_source_info, standard_canvas_size)
+
+        # Then
+        assert crop_params["width"] == 960  # 1920 * 0.5
+        assert crop_params["height"] == 540  # 1080 * 0.5
+        assert crop_params["x"] == 0
+        assert crop_params["y"] == 0
+
+    def test_calculate_crop_params_complex(
+        self, complex_source_info, standard_canvas_size
+    ):
+        """Test crop parameters with position and scale."""
+        # When
+        crop_params = calculate_crop_params(complex_source_info, standard_canvas_size)
+
+        # Then
+        assert crop_params["width"] == 1536  # 1920 * 0.8
+        assert crop_params["height"] == 648  # 1080 * 0.6
+        assert crop_params["x"] == 100
+        assert crop_params["y"] == 50
+
+
 class TestExtractSources:
     """Test cases for extract_sources function."""
 
-    def test_extract_single_source_success(self):
+    def test_extract_single_source_success(
+        self, test_video_file, single_source_metadata
+    ):
         """Test extracting single source from video."""
-        # Given
-        video_file = "tests/fixtures/test_recording.mp4"
-        metadata = {
-            "canvas_size": [1920, 1080],
-            "sources": {
-                "Camera1": {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}}
-            },
-        }
-
         # When
-        result = extract_sources(video_file, metadata)
+        result = extract_sources(test_video_file, single_source_metadata)
 
         # Then
         assert isinstance(result, ExtractionResult)
@@ -81,26 +128,12 @@ class TestExtractSources:
         assert len(result.extracted_files) == 1
         assert "Camera1.mp4" in result.extracted_files[0]
 
-    def test_extract_multiple_sources_success(self):
+    def test_extract_multiple_sources_success(
+        self, test_video_file, dual_source_metadata
+    ):
         """Test extracting multiple sources from video."""
-        # Given
-        video_file = "tests/fixtures/test_recording.mp4"
-        metadata = {
-            "canvas_size": [3840, 1080],
-            "sources": {
-                "Camera1": {
-                    "position": {"x": 0, "y": 0},
-                    "scale": {"x": 1.0, "y": 1.0},
-                },
-                "Camera2": {
-                    "position": {"x": 1920, "y": 0},
-                    "scale": {"x": 1.0, "y": 1.0},
-                },
-            },
-        }
-
         # When
-        result = extract_sources(video_file, metadata)
+        result = extract_sources(test_video_file, dual_source_metadata)
 
         # Then
         assert isinstance(result, ExtractionResult)
@@ -109,19 +142,13 @@ class TestExtractSources:
         assert any("Camera1.mp4" in f for f in result.extracted_files)
         assert any("Camera2.mp4" in f for f in result.extracted_files)
 
-    def test_extract_sources_file_not_found(self):
+    def test_extract_sources_file_not_found(self, single_source_metadata):
         """Test extraction with non-existent video file."""
         # Given
         video_file = "non_existent_file.mp4"
-        metadata = {
-            "canvas_size": [1920, 1080],
-            "sources": {
-                "Camera1": {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}}
-            },
-        }
 
         # When
-        result = extract_sources(video_file, metadata)
+        result = extract_sources(video_file, single_source_metadata)
 
         # Then
         assert isinstance(result, ExtractionResult)
@@ -129,17 +156,10 @@ class TestExtractSources:
         assert result.extracted_files == []
         assert "not found" in result.error_message.lower()
 
-    def test_extract_sources_invalid_metadata(self):
+    def test_extract_sources_invalid_metadata(self, test_video_file, invalid_metadata):
         """Test extraction with invalid metadata."""
-        # Given
-        video_file = "tests/fixtures/test_recording.mp4"
-        metadata = {
-            "canvas_size": [1920, 1080],
-            # Missing sources field
-        }
-
         # When
-        result = extract_sources(video_file, metadata)
+        result = extract_sources(test_video_file, invalid_metadata)
 
         # Then
         assert isinstance(result, ExtractionResult)
@@ -147,14 +167,12 @@ class TestExtractSources:
         assert result.extracted_files == []
         assert "metadata" in result.error_message.lower()
 
-    def test_extract_sources_empty_sources(self):
+    def test_extract_sources_empty_sources(
+        self, test_video_file, empty_sources_metadata
+    ):
         """Test extraction with empty sources list."""
-        # Given
-        video_file = "tests/fixtures/test_recording.mp4"
-        metadata = {"canvas_size": [1920, 1080], "sources": {}}
-
         # When
-        result = extract_sources(video_file, metadata)
+        result = extract_sources(test_video_file, empty_sources_metadata)
 
         # Then
         assert isinstance(result, ExtractionResult)

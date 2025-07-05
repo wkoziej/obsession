@@ -3,7 +3,7 @@
 ## 📋 Status Overview
 - **Faza**: POC (Proof of Concept)
 - **Okres**: 7 dni
-- **Postęp**: 18/29 zadań ukończonych (62%)
+- **Postęp**: 21/29 zadań ukończonych (72%)
 - **Ostatnia aktualizacja**: 2024-01-15
 
 ## 🗓️ Dzień 1: Setup projektu (4/4 ukończone) ✅
@@ -56,16 +56,16 @@
 - [x] **OBS-009**: Zapisywanie JSON do pliku <!-- 2024-01-15 -->
   - Path resolution i file I/O
 
-## 🗓️ Dzień 5: Extractor struktura (1/4 ukończone)
+## 🗓️ Dzień 5: Extractor struktura (4/4 ukończone) ✅
 
 ### Podstawowy ekstraktor
 - [x] **EXT-001**: Stworzenie `ExtractionResult` class <!-- 2024-01-15 -->
   - Data structure dla wyników ekstrakcji
-- [ ] **EXT-002**: Test `extract_single_source()` - RED phase
+- [x] **EXT-002**: Test `extract_single_source()` - RED phase <!-- 2024-01-15 -->
   - Podstawowy test case z mock danymi
-- [ ] **EXT-003**: Implementacja `extract_sources()` - GREEN phase
+- [x] **EXT-003**: Implementacja `extract_sources()` - GREEN phase <!-- 2024-01-15 -->
   - Szkielet funkcji z walidacją parametrów
-- [ ] **EXT-004**: Testy walidacji input
+- [x] **EXT-004**: Testy walidacji input <!-- 2024-01-15 -->
   - File existence, metadata validation
 
 ## 🗓️ Dzień 6: FFmpeg integration (0/4 ukończone)
@@ -116,7 +116,7 @@
 - **Dzień 2**: 4/4 (100%) ✅
 - **Dzień 3**: 4/4 (100%) ✅
 - **Dzień 4**: 5/5 (100%) ✅
-- **Dzień 5**: 0/4 (0%)
+- **Dzień 5**: 4/4 (100%) ✅
 - **Dzień 6**: 0/4 (0%)
 - **Dzień 7**: 0/4 (0%)
 
@@ -124,7 +124,7 @@
 - **Środowisko**: 4/4 (100%) ✅
 - **Metadata**: 4/4 (100%) ✅
 - **OBS Integration**: 9/9 (100%) ✅
-- **Extractor**: 1/8 (12%)
+- **Extractor**: 4/8 (50%)
 - **CLI**: 0/4 (0%)
 
 ## 🚨 Ryzyka i blokery

@@ -44,6 +44,39 @@ class ExtractionResult:
         )
 
 
+def calculate_crop_params(
+    source_info: Dict[str, Any], canvas_size: List[int]
+) -> Dict[str, int]:
+    """
+    Calculate crop parameters for FFmpeg based on source info.
+
+    Args:
+        source_info: Source information with position and scale
+        canvas_size: Canvas dimensions [width, height]
+
+    Returns:
+        Dictionary with crop parameters (x, y, width, height)
+    """
+    # Extract position and scale from source info
+    position = source_info.get("position", {"x": 0, "y": 0})
+    scale = source_info.get("scale", {"x": 1.0, "y": 1.0})
+
+    # For POC: assume standard source size (1920x1080) scaled by scale factor
+    # In real implementation, this would come from source metadata
+    standard_source_width = 1920
+    standard_source_height = 1080
+
+    # Calculate crop dimensions based on standard source size and scale
+    crop_width = int(standard_source_width * scale["x"])
+    crop_height = int(standard_source_height * scale["y"])
+
+    # Position is where to crop from
+    crop_x = int(position["x"])
+    crop_y = int(position["y"])
+
+    return {"x": crop_x, "y": crop_y, "width": crop_width, "height": crop_height}
+
+
 def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResult:
     """
     Extract individual sources from canvas recording.
