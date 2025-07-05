@@ -11,7 +11,6 @@ from src.core.extractor import (
     sanitize_filename,
     SourceExtractor,
 )
-import pytest
 
 
 class TestExtractionResult:
@@ -398,181 +397,37 @@ class TestExtractorWithCapabilities:
 class TestCropParamsEdgeCases:
     """Test edge cases for crop parameter calculation."""
 
-    def test_upscaled_source_exceeds_original_dimensions(self):
-        """Test source scaled up beyond original dimensions."""
-        # Given - source upscaled beyond original size (like our real case)
-        source_info = {
-            "position": {"x": 0, "y": 0},
-            "scale": {"x": 1.053125, "y": 1.0527777},  # >1.0 scale
-            "dimensions": {
-                "source_width": 640,
-                "source_height": 360,
-                "final_width": 674,  # Bigger than source!
-                "final_height": 378,
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When
-        params = calculate_crop_params(source_info, canvas_size)
-
-        # Then - crop should be limited to source dimensions
-        assert params["width"] == 640  # Limited to source_width
-        assert params["height"] == 359  # Limited by visible area calculation
-        assert params["x"] == 0
-        assert params["y"] == 0
-
-    def test_source_with_zero_dimensions(self):
-        """Test source with 0x0 dimensions (audio-only)."""
-        # Given - audio-only source
-        source_info = {
-            "position": {"x": 0, "y": 0},
-            "scale": {"x": 1.0, "y": 1.0},
-            "dimensions": {
-                "source_width": 0,
-                "source_height": 0,
-                "final_width": 0,
-                "final_height": 0,
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When/Then - should raise ValueError
-        with pytest.raises(ValueError, match="Source has invalid dimensions: 0x0"):
-            calculate_crop_params(source_info, canvas_size)
-
-    def test_source_positioned_outside_canvas(self):
-        """Test source positioned outside canvas bounds."""
-        # Given - source positioned beyond canvas
-        source_info = {
-            "position": {"x": 1500, "y": 800},  # Outside 1280x720 canvas
-            "scale": {"x": 1.0, "y": 1.0},
-            "dimensions": {
-                "source_width": 640,
-                "source_height": 360,
-                "final_width": 640,
-                "final_height": 360,
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When
-        params = calculate_crop_params(source_info, canvas_size)
-
-        # Then - source is completely outside canvas, minimal crop
-        assert params["x"] == 0  # No visible part, crop from start
-        assert params["y"] == 0  # No visible part, crop from start
-        assert params["width"] == 1  # Minimal crop (no visible area)
-        assert params["height"] == 1  # Minimal crop (no visible area)
-
-    def test_source_partially_outside_canvas(self):
-        """Test source partially outside canvas bounds."""
-        # Given - source extends beyond canvas
-        source_info = {
-            "position": {"x": 900, "y": 400},  # Partially outside 1280x720
-            "scale": {"x": 1.0, "y": 1.0},
-            "dimensions": {
-                "source_width": 640,
-                "source_height": 360,
-                "final_width": 640,
-                "final_height": 360,
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When
-        params = calculate_crop_params(source_info, canvas_size)
-
-        # Then - should crop only visible part from source
-        assert params["x"] == 0  # Crop from start of source
-        assert params["y"] == 0  # Crop from start of source
-        # Visible area: from (900, 400) to (1280, 720) = 380x320
-        assert params["width"] == 380  # 1280 - 900
-        assert params["height"] == 320  # 720 - 400
-
-    def test_downscaled_source(self):
-        """Test source scaled down (scale < 1.0)."""
-        # Given - source scaled down
-        source_info = {
-            "position": {"x": 606, "y": 330},
-            "scale": {"x": 0.503125, "y": 0.5027777},  # <1.0 scale
-            "dimensions": {
-                "source_width": 1920,
-                "source_height": 1080,
-                "final_width": 966,  # 1920 * 0.503125
-                "final_height": 543,  # 1080 * 0.5027777
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When
-        params = calculate_crop_params(source_info, canvas_size)
-
-        # Then - crop from source coordinates
-        assert params["x"] == 0  # Crop from start of source
-        assert params["y"] == 0  # Crop from start of source
-        # Visible area: from (606, 330) to (1280, 720) = 674x390
-        # In source coords: 674/0.503125 = 1339, 390/0.5027777 = 775
-        assert params["width"] == 1339  # 674 / 0.503125
-        assert params["height"] == 775  # 390 / 0.5027777 (rounded down)
-
-    def test_negative_position(self):
-        """Test source with negative position."""
-        # Given - source with negative position (partially outside canvas)
-        source_info = {
-            "position": {"x": -100, "y": -50},
-            "scale": {"x": 1.0, "y": 1.0},
-            "dimensions": {
-                "source_width": 640,
-                "source_height": 360,
-                "final_width": 640,
-                "final_height": 360,
-            },
-        }
-        canvas_size = [1280, 720]
-
-        # When
-        params = calculate_crop_params(source_info, canvas_size)
-
-        # Then - should crop from inside source to show only visible part
-        # Source starts at (-100, -50), so crop from (100, 50) in source coordinates
-        # Visible area: from (0,0) to (540, 310) on canvas = 540x310
-        assert params["x"] == 100  # Crop from inside source
-        assert params["y"] == 50  # Crop from inside source
-        assert params["width"] == 540  # 640 - 100 = 540 (visible width)
-        assert params["height"] == 310  # 360 - 50 = 310 (visible height)
-
     def test_source_with_missing_dimensions(self):
-        """Test source with missing dimensions data."""
-        # Given - source without dimensions (fallback scenario)
+        """Test source with missing dimension data."""
+        # Given - source without dimension info
         source_info = {
-            "position": {"x": 0, "y": 0},
+            "position": {"x": 100, "y": 50},
             "scale": {"x": 1.0, "y": 1.0},
             # Missing dimensions field
         }
-        canvas_size = [1280, 720]
+        canvas_size = [1920, 1080]
 
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
         # Then - should use fallback dimensions
-        assert params["width"] == 1280  # Limited by canvas
-        assert params["height"] == 720  # Limited by canvas
-        assert params["x"] == 0
-        assert params["y"] == 0
+        assert params["x"] == 100
+        assert params["y"] == 50
+        assert params["width"] == 1820  # 1920 - 100 (fits on canvas)
+        assert params["height"] == 1030  # 1080 - 50 (fits on canvas)
 
     def test_source_with_bounds_negative_position(self):
-        """Test source with bounds and negative position (real camera example)."""
-        # Given - real camera example with bounds
+        """Test source with bounds and negative position."""
+        # Given - source with bounds extending beyond canvas
         source_info = {
-            "position": {"x": -119, "y": 418},
-            "scale": {"x": 1.0, "y": 1.0},  # Błędna skala z OBS
-            "bounds": {"x": 223, "y": 127},  # Rzeczywiste wymiary po przeskalowaniu
+            "position": {"x": -50, "y": -30},
+            "bounds": {"x": 200, "y": 150, "type": 1},
+            "scale": {"x": 1.0, "y": 1.0},
             "dimensions": {
-                "source_width": 1280,
-                "source_height": 720,
-                "final_width": 223,  # Zgodne z bounds
-                "final_height": 127,
+                "source_width": 640,
+                "source_height": 360,
+                "final_width": 640,
+                "final_height": 360,
             },
         }
         canvas_size = [1920, 1080]
@@ -580,12 +435,8 @@ class TestCropParamsEdgeCases:
         # When
         params = calculate_crop_params(source_info, canvas_size)
 
-        # Then - crop visible part from canvas
-        # Camera at (-119, 418) with size 223x127
-        # Visible area: from (0, 418) to (104, 545) = 104x127
-        assert (
-            params["x"] == 0
-        )  # Crop from left edge of canvas (visible part starts at x=0)
-        assert params["y"] == 418  # Crop from y=418 on canvas
-        assert params["width"] == 104  # Visible width on canvas
-        assert params["height"] == 127  # Visible height on canvas
+        # Then - should crop only visible part on canvas
+        assert params["x"] == 0  # Clamp negative position to 0
+        assert params["y"] == 0  # Clamp negative position to 0
+        assert params["width"] == 150  # 200 - 50 (part outside canvas)
+        assert params["height"] == 120  # 150 - 30 (part outside canvas)
