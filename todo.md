@@ -3,7 +3,7 @@
 ## 📋 Status Overview
 - **Faza**: POC (Proof of Concept)
 - **Okres**: 7 dni
-- **Postęp**: 25/29 zadań ukończonych (86%)
+- **Postęp**: 26/29 zadań ukończonych (90%)
 - **Ostatnia aktualizacja**: 2024-01-15
 
 ## 🗓️ Dzień 1: Setup projektu (4/4 ukończone) ✅
@@ -80,11 +80,13 @@
 - [x] **EXT-008**: Output file management <!-- 2024-01-15 -->
   - Directory creation, file naming, safe filename generation
 
-## 🗓️ Dzień 7: CLI i demo (0/4 ukończone)
+## 🗓️ Dzień 7: CLI i demo (1/4 ukończone)
 
 ### Interface i integracja
-- [ ] **CLI-001**: Implementacja `cli/extract.py`
+- [x] **CLI-001**: Implementacja `cli/extract.py` <!-- 2024-01-15 -->
   - Argument parsing, main function
+  - Walidacja plików wejściowych, obsługa błędów JSON/I/O
+  - Entry point obs-extract, 7 testów jednostkowych (TDD: RED->GREEN)
 - [ ] **CLI-002**: End-to-end test workflow
   - OBS recording → metadata → extraction
 - [ ] **CLI-003**: Demo scenariusz
@@ -118,14 +120,14 @@
 - **Dzień 4**: 5/5 (100%) ✅
 - **Dzień 5**: 4/4 (100%) ✅
 - **Dzień 6**: 4/4 (100%) ✅
-- **Dzień 7**: 0/4 (0%)
+- **Dzień 7**: 1/4 (25%)
 
 ### Postęp według kategorii:
 - **Środowisko**: 4/4 (100%) ✅
 - **Metadata**: 4/4 (100%) ✅
 - **OBS Integration**: 9/9 (100%) ✅
 - **Extractor**: 8/8 (100%) ✅
-- **CLI**: 0/4 (0%)
+- **CLI**: 1/4 (25%)
 
 ## 🚨 Ryzyka i blokery
 
