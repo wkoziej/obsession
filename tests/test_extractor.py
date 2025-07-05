@@ -3,6 +3,8 @@ Test module for extractor functionality.
 Following TDD approach - starting with RED phase.
 """
 
+import subprocess
+from unittest.mock import patch, Mock
 from src.core.extractor import ExtractionResult, extract_sources, calculate_crop_params
 
 
@@ -115,10 +117,14 @@ class TestCropParams:
 class TestExtractSources:
     """Test cases for extract_sources function."""
 
+    @patch("subprocess.run")
     def test_extract_single_source_success(
-        self, test_video_file, single_source_metadata
+        self, mock_subprocess, test_video_file, single_source_metadata
     ):
         """Test extracting single source from video."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
         # When
         result = extract_sources(test_video_file, single_source_metadata)
 
@@ -128,10 +134,14 @@ class TestExtractSources:
         assert len(result.extracted_files) == 1
         assert "Camera1.mp4" in result.extracted_files[0]
 
+    @patch("subprocess.run")
     def test_extract_multiple_sources_success(
-        self, test_video_file, dual_source_metadata
+        self, mock_subprocess, test_video_file, dual_source_metadata
     ):
         """Test extracting multiple sources from video."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
         # When
         result = extract_sources(test_video_file, dual_source_metadata)
 
@@ -154,6 +164,7 @@ class TestExtractSources:
         assert isinstance(result, ExtractionResult)
         assert result.success is False
         assert result.extracted_files == []
+        assert result.error_message is not None
         assert "not found" in result.error_message.lower()
 
     def test_extract_sources_invalid_metadata(self, test_video_file, invalid_metadata):
@@ -165,6 +176,7 @@ class TestExtractSources:
         assert isinstance(result, ExtractionResult)
         assert result.success is False
         assert result.extracted_files == []
+        assert result.error_message is not None
         assert "metadata" in result.error_message.lower()
 
     def test_extract_sources_empty_sources(
@@ -178,3 +190,130 @@ class TestExtractSources:
         assert isinstance(result, ExtractionResult)
         assert result.success is True
         assert result.extracted_files == []
+
+
+class TestFFmpegIntegration:
+    """Test cases for FFmpeg subprocess integration."""
+
+    @patch("subprocess.run")
+    def test_ffmpeg_command_construction(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test that FFmpeg command is constructed correctly."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        mock_subprocess.assert_called_once()
+
+        # Verify FFmpeg command structure
+        call_args = mock_subprocess.call_args[0][
+            0
+        ]  # First positional argument (command list)
+        assert call_args[0] == "ffmpeg"
+        assert "-i" in call_args
+        assert test_video_file in call_args
+        assert "-filter:v" in call_args
+        assert "crop=" in " ".join(call_args)
+
+    @patch("subprocess.run")
+    def test_ffmpeg_success_creates_output_files(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test successful FFmpeg execution creates output files."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        assert len(result.extracted_files) == 1
+        assert result.extracted_files[0].endswith("Camera1.mp4")
+
+    @patch("subprocess.run")
+    def test_ffmpeg_failure_returns_error(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test FFmpeg failure is handled properly."""
+        # Given
+        mock_subprocess.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd=["ffmpeg"], stderr=b"FFmpeg error occurred"
+        )
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is False
+        assert result.extracted_files == []
+        assert result.error_message is not None
+        assert "ffmpeg" in result.error_message.lower()
+
+    @patch("subprocess.run")
+    def test_ffmpeg_multiple_sources_multiple_calls(
+        self, mock_subprocess, test_video_file, dual_source_metadata
+    ):
+        """Test that multiple sources result in multiple FFmpeg calls."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, dual_source_metadata)
+
+        # Then
+        assert result.success is True
+        assert len(result.extracted_files) == 2
+        assert mock_subprocess.call_count == 2
+
+    @patch("subprocess.run")
+    @patch("pathlib.Path.mkdir")
+    def test_output_directory_creation(
+        self, mock_mkdir, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test that output directory is created."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        mock_mkdir.assert_called_once_with(exist_ok=True)
+
+    @patch("subprocess.run")
+    def test_ffmpeg_crop_parameters_correct(
+        self,
+        mock_subprocess,
+        test_video_file,
+        complex_source_info,
+        standard_canvas_size,
+    ):
+        """Test that crop parameters are passed correctly to FFmpeg."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+        metadata = {
+            "canvas_size": standard_canvas_size,
+            "sources": {"TestSource": complex_source_info},
+        }
+
+        # When
+        result = extract_sources(test_video_file, metadata)
+
+        # Then
+        assert result.success is True
+        call_args = mock_subprocess.call_args[0][0]
+        crop_filter = None
+        for i, arg in enumerate(call_args):
+            if arg == "-filter:v":
+                crop_filter = call_args[i + 1]
+                break
+
+        assert crop_filter is not None
+        assert "crop=1536:648:100:50" in crop_filter  # width:height:x:y

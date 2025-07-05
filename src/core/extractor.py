@@ -3,6 +3,7 @@ Extractor functionality for OBS Canvas Recording.
 This module handles video source extraction from canvas recordings.
 """
 
+import subprocess
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
@@ -111,17 +112,55 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
     if not sources:
         return ExtractionResult(success=True, extracted_files=[])
 
-    # For now, mock the extraction process
-    # In real implementation, this would use FFmpeg
-    extracted_files = []
-
     # Create output directory
     video_path = Path(video_file)
     output_dir = video_path.parent / f"{video_path.stem}_extracted"
+    output_dir.mkdir(exist_ok=True)
 
-    # Mock extraction for each source
-    for source_name in sources.keys():
+    # Get canvas size for crop calculations
+    canvas_size = metadata.get("canvas_size", [1920, 1080])
+
+    extracted_files = []
+
+    # Extract each source using FFmpeg
+    for source_name, source_info in sources.items():
         output_file = output_dir / f"{source_name}.mp4"
-        extracted_files.append(str(output_file))
+
+        # Calculate crop parameters
+        crop_params = calculate_crop_params(source_info, canvas_size)
+
+        # Build FFmpeg command
+        crop_filter = f"crop={crop_params['width']}:{crop_params['height']}:{crop_params['x']}:{crop_params['y']}"
+
+        cmd = [
+            "ffmpeg",
+            "-i",
+            str(video_file),
+            "-filter:v",
+            crop_filter,
+            "-c:v",
+            "libx264",
+            "-crf",
+            "23",
+            "-preset",
+            "fast",
+            "-y",  # Overwrite output files
+            str(output_file),
+        ]
+
+        try:
+            # Execute FFmpeg command
+            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            extracted_files.append(str(output_file))
+        except subprocess.CalledProcessError as e:
+            return ExtractionResult(
+                success=False,
+                error_message=f"FFmpeg failed to extract {source_name}: {e.stderr}",
+            )
+        except FileNotFoundError:
+            return ExtractionResult(
+                success=False,
+                error_message="FFmpeg not found. Please install FFmpeg and ensure it's in your PATH.",
+            )
 
     return ExtractionResult(success=True, extracted_files=extracted_files)
