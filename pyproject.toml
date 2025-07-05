@@ -43,10 +43,13 @@ Repository = "https://github.com/obs-canvas-recorder/obs-canvas-recorder"
 Issues = "https://github.com/obs-canvas-recorder/obs-canvas-recorder/issues"
 
 [project.scripts]
-obs-extract = "src.cli.extract:main"
+obs-extract = "cli.extract:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

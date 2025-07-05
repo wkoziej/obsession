@@ -179,14 +179,29 @@ def collect_and_save_metadata():
         return
 
     try:
-        # Collect scene items
+        # Convert source to scene
+        scene = obs.obs_scene_from_source(current_scene)
+        if scene is None:
+            print("[Canvas Recorder] Failed to get scene from source")
+            return
+
+        # Collect scene items - in Python API, this returns a list
+        scene_items = obs.obs_scene_enum_items(scene)
+        if scene_items is None:
+            print("[Canvas Recorder] No scene items found")
+            return
+
         sources = {}
 
-        def enum_scene_items(scene, scene_item, data):
-            """Callback for enumerating scene items."""
+        # Process each scene item
+        for scene_item in scene_items:
+            if scene_item is None:
+                continue
+
+            # Get source from scene item
             source = obs.obs_sceneitem_get_source(scene_item)
             if source is None:
-                return True
+                continue
 
             # Get source info
             source_name = obs.obs_source_get_name(source)
@@ -221,10 +236,8 @@ def collect_and_save_metadata():
                 "visible": obs.obs_sceneitem_visible(scene_item),
             }
 
-            return True  # Continue enumeration
-
-        # Enumerate scene items
-        obs.obs_scene_enum_items(current_scene, enum_scene_items, None)
+        # Release scene items list
+        obs.sceneitem_list_release(scene_items)
 
         # Complete metadata
         metadata = {
