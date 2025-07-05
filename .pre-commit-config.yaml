@@ -1,0 +1,72 @@
+# Pre-commit hooks dla projektu Synkopa
+# Instalacja: uv run pre-commit install
+# Uruchomienie: uv run pre-commit run --all-files
+
+repos:
+  # Podstawowe formatowanie i sprawdzanie
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: debug-statements
+
+  # Ruff - szybki linter i formatter dla Python
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.1
+    hooks:
+      # Linting (sprawdzanie jakości kodu)
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+      # Formatowanie kodu
+      - id: ruff-format
+        types_or: [python, pyi]
+
+  # Sprawdzanie typów z mypy (opcjonalne - może być wolne)
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.8.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [types-all]
+  #       args: [--ignore-missing-imports]
+
+  # Sprawdzanie bezpieczeństwa z bandit (wyłączone - false positive)
+  # - repo: https://github.com/PyCQA/bandit
+  #   rev: 1.7.5
+  #   hooks:
+  #     - id: bandit
+  #       args: [-r, src/]
+  #       exclude: tests/
+
+  # Sortowanie importów (ruff już to robi, ale można dodać jako backup)
+  # - repo: https://github.com/pycqa/isort
+  #   rev: 5.13.2
+  #   hooks:
+  #     - id: isort
+  #       args: ["--profile", "black"]
+
+# Konfiguracja globalna
+default_language_version:
+  python: python3.12
+
+# Które pliki sprawdzać
+files: ^(src/|tests/).*\.py$
+
+# Wykluczenia
+exclude: |
+  (?x)^(
+    \.venv/|
+    build/|
+    dist/|
+    .*\.egg-info/|
+    htmlcov/|
+    \.pytest_cache/|
+    __pycache__/
+  ).*$ 
