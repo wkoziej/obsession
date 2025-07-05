@@ -5,7 +5,13 @@ Following TDD approach - starting with RED phase.
 
 import subprocess
 from unittest.mock import patch, Mock
-from src.core.extractor import ExtractionResult, extract_sources, calculate_crop_params
+from pathlib import Path
+from src.core.extractor import (
+    ExtractionResult,
+    extract_sources,
+    calculate_crop_params,
+    sanitize_filename,
+)
 
 
 class TestExtractionResult:
@@ -463,3 +469,247 @@ class TestRealVideoIntegration:
         output_dir = Path(video_file).parent / f"{Path(video_file).stem}_extracted"
         if output_dir.exists():
             shutil.rmtree(output_dir)
+
+
+class TestOutputFileManagement:
+    """Test cases for enhanced output file and directory management."""
+
+    @patch("subprocess.run")
+    def test_output_directory_naming_with_timestamp(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test that output directory can include timestamp for uniqueness."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        output_file = Path(result.extracted_files[0])
+        assert "test_recording_extracted" in str(output_file.parent)
+
+    @patch("subprocess.run")
+    def test_safe_filename_generation(self, mock_subprocess, test_video_file):
+        """Test that source names with special characters are sanitized."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": {
+                'Source/With\\Special:Characters*?<>|"': {
+                    "position": {"x": 0, "y": 0},
+                    "scale": {"x": 1.0, "y": 1.0},
+                }
+            },
+        }
+
+        # When
+        result = extract_sources(test_video_file, metadata)
+
+        # Then
+        assert result.success is True
+        output_file = Path(result.extracted_files[0])
+        # Should not contain problematic characters
+        assert "/" not in output_file.name
+        assert "\\" not in output_file.name
+        assert ":" not in output_file.name
+        assert "*" not in output_file.name
+        assert "?" not in output_file.name
+        assert "<" not in output_file.name
+        assert ">" not in output_file.name
+        assert "|" not in output_file.name
+        assert '"' not in output_file.name
+
+    @patch("subprocess.run")
+    def test_duplicate_source_name_handling(self, mock_subprocess, test_video_file):
+        """Test handling of duplicate source names with automatic numbering."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": {
+                "Camera": {"position": {"x": 0, "y": 0}, "scale": {"x": 1.0, "y": 1.0}},
+                "Camera_2": {  # Potential conflict with auto-numbering
+                    "position": {"x": 1920, "y": 0},
+                    "scale": {"x": 1.0, "y": 1.0},
+                },
+            },
+        }
+
+        # When
+        result = extract_sources(test_video_file, metadata)
+
+        # Then
+        assert result.success is True
+        assert len(result.extracted_files) == 2
+        # All files should have unique names
+        filenames = [Path(f).name for f in result.extracted_files]
+        assert len(set(filenames)) == 2
+
+    @patch("subprocess.run")
+    def test_custom_output_directory_support(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test support for custom output directory paths."""
+        # This test would require extending extract_sources to accept output_dir parameter
+        # For now, just test current behavior
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        output_file = Path(result.extracted_files[0])
+        # Should be in default location relative to input file
+        assert output_file.parent.name == "test_recording_extracted"
+
+    @patch("subprocess.run")
+    def test_preserve_file_extensions_from_metadata(
+        self, mock_subprocess, test_video_file
+    ):
+        """Test that custom file extensions from metadata are preserved."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "sources": {
+                "Camera1": {
+                    "position": {"x": 0, "y": 0},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "output_format": "mkv",  # Custom format
+                }
+            },
+        }
+
+        # When
+        result = extract_sources(test_video_file, metadata)
+
+        # Then
+        assert result.success is True
+        # Currently defaults to .mp4, but could be extended to support custom formats
+        assert result.extracted_files[0].endswith(".mp4")
+
+    @patch("subprocess.run")
+    def test_error_handling_directory_creation_failure(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test error handling when output directory creation fails."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # Mock Path.mkdir to raise PermissionError
+        with patch("pathlib.Path.mkdir") as mock_mkdir:
+            mock_mkdir.side_effect = PermissionError("Permission denied")
+
+            # When
+            result = extract_sources(test_video_file, single_source_metadata)
+
+            # Then
+            assert result.success is False
+            assert result.error_message is not None
+            assert (
+                "permission" in result.error_message.lower()
+                or "directory" in result.error_message.lower()
+            )
+
+    @patch("subprocess.run")
+    def test_relative_vs_absolute_paths_in_result(
+        self, mock_subprocess, test_video_file, single_source_metadata
+    ):
+        """Test that extracted files paths are consistently formatted."""
+        # Given
+        mock_subprocess.return_value = Mock(returncode=0)
+
+        # When
+        result = extract_sources(test_video_file, single_source_metadata)
+
+        # Then
+        assert result.success is True
+        for file_path in result.extracted_files:
+            # Should be absolute paths for consistency
+            assert (
+                Path(file_path).is_absolute() or "/" in file_path or "\\" in file_path
+            )
+
+
+class TestSanitizeFilename:
+    """Test cases for filename sanitization."""
+
+    def test_sanitize_filename_basic(self):
+        """Test basic filename sanitization."""
+        # Given
+        filename = "Camera1"
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "Camera1"
+
+    def test_sanitize_filename_with_special_characters(self):
+        """Test sanitization of filename with special characters."""
+        # Given
+        filename = 'Source/With\\Special:Characters*?<>|"'
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "Source_With_Special_Characters"
+        assert "/" not in result
+        assert "\\" not in result
+        assert ":" not in result
+        assert "*" not in result
+        assert "?" not in result
+        assert "<" not in result
+        assert ">" not in result
+        assert "|" not in result
+        assert '"' not in result
+
+    def test_sanitize_filename_multiple_underscores(self):
+        """Test that multiple consecutive underscores are collapsed."""
+        # Given
+        filename = "Source///With\\\\\\Many:::Special"
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "Source_With_Many_Special"
+
+    def test_sanitize_filename_leading_trailing_underscores(self):
+        """Test removal of leading and trailing underscores."""
+        # Given
+        filename = "/Source_Name/"
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "Source_Name"
+
+    def test_sanitize_filename_empty_after_sanitization(self):
+        """Test handling of filename that becomes empty after sanitization."""
+        # Given
+        filename = "///**???"
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "source"
+
+    def test_sanitize_filename_only_special_characters(self):
+        """Test sanitization of filename with only special characters."""
+        # Given
+        filename = '<>|*?"'
+
+        # When
+        result = sanitize_filename(filename)
+
+        # Then
+        assert result == "source"

@@ -3,6 +3,7 @@ Extractor functionality for OBS Canvas Recording.
 This module handles video source extraction from canvas recordings.
 """
 
+import re
 import subprocess
 from typing import List, Optional, Dict, Any
 from pathlib import Path
@@ -43,6 +44,33 @@ class ExtractionResult:
             f"extracted_files={len(self.extracted_files)}, "
             f"error_message={self.error_message})"
         )
+
+
+def sanitize_filename(filename: str) -> str:
+    """
+    Sanitize filename by removing or replacing problematic characters.
+
+    Args:
+        filename: Original filename that may contain special characters
+
+    Returns:
+        Sanitized filename safe for filesystem use
+    """
+    # Replace problematic characters with underscores
+    # Characters: / \ : * ? " < > |
+    sanitized = re.sub(r'[/\\:*?"<>|]', "_", filename)
+
+    # Remove multiple consecutive underscores
+    sanitized = re.sub(r"_+", "_", sanitized)
+
+    # Remove leading/trailing underscores
+    sanitized = sanitized.strip("_")
+
+    # Ensure filename is not empty after sanitization
+    if not sanitized:
+        sanitized = "source"
+
+    return sanitized
 
 
 def calculate_crop_params(
@@ -115,7 +143,19 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
     # Create output directory
     video_path = Path(video_file)
     output_dir = video_path.parent / f"{video_path.stem}_extracted"
-    output_dir.mkdir(exist_ok=True)
+
+    try:
+        output_dir.mkdir(exist_ok=True)
+    except PermissionError:
+        return ExtractionResult(
+            success=False,
+            error_message=f"Permission denied: Cannot create output directory {output_dir}",
+        )
+    except OSError as e:
+        return ExtractionResult(
+            success=False,
+            error_message=f"Failed to create output directory {output_dir}: {e}",
+        )
 
     # Get canvas size for crop calculations
     canvas_size = metadata.get("canvas_size", [1920, 1080])
@@ -124,7 +164,9 @@ def extract_sources(video_file: str, metadata: Dict[str, Any]) -> ExtractionResu
 
     # Extract each source using FFmpeg
     for source_name, source_info in sources.items():
-        output_file = output_dir / f"{source_name}.mp4"
+        # Sanitize source name for safe filename
+        safe_source_name = sanitize_filename(source_name)
+        output_file = output_dir / f"{safe_source_name}.mp4"
 
         # Calculate crop parameters
         crop_params = calculate_crop_params(source_info, canvas_size)
