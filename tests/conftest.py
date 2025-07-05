@@ -68,10 +68,6 @@ def mock_obspython():
 
         obs_script_module.obs = mock_obs
 
-        import src.obs_integration.scene_analyzer as scene_analyzer_module
-
-        scene_analyzer_module.obs = mock_obs
-
     return sys.modules["obspython"]
 
 
