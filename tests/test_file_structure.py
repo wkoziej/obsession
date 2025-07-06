@@ -285,3 +285,146 @@ class TestFileStructureManager:
         assert extracted_dir.exists()
         assert extracted_dir.is_dir()
         assert extracted_dir == existing_extracted
+
+    def test_ensure_blender_dir(self, tmp_path):
+        """Test ensure_blender_dir() - tworzenie katalogu blender."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+
+        blender_dir = FileStructureManager.ensure_blender_dir(recording_dir)
+
+        assert blender_dir == recording_dir / "blender"
+        assert blender_dir.exists()
+        assert blender_dir.is_dir()
+
+        # Sprawdź czy katalog render został utworzony
+        render_dir = blender_dir / "render"
+        assert render_dir.exists()
+        assert render_dir.is_dir()
+
+    def test_ensure_blender_dir_already_exists(self, tmp_path):
+        """Test ensure_blender_dir() gdy katalog już istnieje."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+
+        # Utwórz katalog blender
+        blender_dir = recording_dir / "blender"
+        blender_dir.mkdir()
+
+        result = FileStructureManager.ensure_blender_dir(recording_dir)
+
+        assert result == blender_dir
+        assert blender_dir.exists()
+        assert blender_dir.is_dir()
+
+    def test_find_audio_files_empty_directory(self, tmp_path):
+        """Test find_audio_files() z pustym katalogiem."""
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        audio_files = FileStructureManager.find_audio_files(extracted_dir)
+
+        assert audio_files == []
+
+    def test_find_audio_files_with_audio(self, tmp_path):
+        """Test find_audio_files() z plikami audio."""
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        # Utwórz pliki audio
+        audio_files = [
+            extracted_dir / "main.mp3",
+            extracted_dir / "background.wav",
+            extracted_dir / "voice.m4a",
+        ]
+
+        for file_path in audio_files:
+            file_path.touch()
+
+        # Utwórz pliki nie-audio
+        (extracted_dir / "video.mp4").touch()
+        (extracted_dir / "document.txt").touch()
+
+        found_audio = FileStructureManager.find_audio_files(extracted_dir)
+
+        # Sprawdź czy znaleziono tylko pliki audio, posortowane
+        expected = [
+            extracted_dir / "background.wav",
+            extracted_dir / "main.mp3",
+            extracted_dir / "voice.m4a",
+        ]
+        assert found_audio == expected
+
+    def test_find_audio_files_nonexistent_directory(self, tmp_path):
+        """Test find_audio_files() z nieistniejącym katalogiem."""
+        nonexistent_dir = tmp_path / "nonexistent"
+
+        audio_files = FileStructureManager.find_audio_files(nonexistent_dir)
+
+        assert audio_files == []
+
+    def test_find_video_files_empty_directory(self, tmp_path):
+        """Test find_video_files() z pustym katalogiem."""
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        video_files = FileStructureManager.find_video_files(extracted_dir)
+
+        assert video_files == []
+
+    def test_find_video_files_with_videos(self, tmp_path):
+        """Test find_video_files() z plikami wideo."""
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        # Utwórz pliki wideo
+        video_files = [
+            extracted_dir / "camera1.mp4",
+            extracted_dir / "screen.mkv",
+            extracted_dir / "webcam.avi",
+        ]
+
+        for file_path in video_files:
+            file_path.touch()
+
+        # Utwórz pliki nie-wideo
+        (extracted_dir / "audio.mp3").touch()
+        (extracted_dir / "document.txt").touch()
+
+        found_videos = FileStructureManager.find_video_files(extracted_dir)
+
+        # Sprawdź czy znaleziono tylko pliki wideo, posortowane
+        expected = [
+            extracted_dir / "camera1.mp4",
+            extracted_dir / "screen.mkv",
+            extracted_dir / "webcam.avi",
+        ]
+        assert found_videos == expected
+
+    def test_find_video_files_nonexistent_directory(self, tmp_path):
+        """Test find_video_files() z nieistniejącym katalogiem."""
+        nonexistent_dir = tmp_path / "nonexistent"
+
+        video_files = FileStructureManager.find_video_files(nonexistent_dir)
+
+        assert video_files == []
+
+    def test_find_video_files_case_insensitive(self, tmp_path):
+        """Test find_video_files() z różnymi wielkościami liter w rozszerzeniach."""
+        extracted_dir = tmp_path / "extracted"
+        extracted_dir.mkdir()
+
+        # Utwórz pliki z różnymi wielkościami liter
+        video_files = [
+            extracted_dir / "video1.MP4",
+            extracted_dir / "video2.MKV",
+            extracted_dir / "video3.AVI",
+        ]
+
+        for file_path in video_files:
+            file_path.touch()
+
+        found_videos = FileStructureManager.find_video_files(extracted_dir)
+
+        assert len(found_videos) == 3
+        assert all(f.suffix.lower() in [".mp4", ".mkv", ".avi"] for f in found_videos)

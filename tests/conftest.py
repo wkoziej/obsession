@@ -274,3 +274,119 @@ def standard_canvas_size():
 def wide_canvas_size():
     """Fixture for wide canvas size."""
     return [3840, 1080]
+
+
+# Blender Test Fixtures
+@pytest.fixture
+def sample_recording_structure(tmp_path):
+    """
+    Fixture for sample recording directory structure.
+    Creates a complete recording structure with files for testing.
+    """
+    # Create recording directory
+    recording_dir = tmp_path / "sample_recording"
+    recording_dir.mkdir()
+
+    # Create metadata.json
+    metadata_file = recording_dir / "metadata.json"
+    metadata_content = """
+    {
+        "canvas_size": {"width": 1920, "height": 1080},
+        "fps": 30,
+        "recording_started": "2025-01-05T14:30:22",
+        "recording_stopped": "2025-01-05T14:35:45",
+        "sources": [
+            {
+                "name": "Camera1",
+                "id": "camera_source",
+                "type": "dshow_input",
+                "visible": true,
+                "position": {"x": 0, "y": 0},
+                "scale": {"x": 1.0, "y": 1.0},
+                "dimensions": {
+                    "source_width": 1920,
+                    "source_height": 1080,
+                    "final_width": 1920,
+                    "final_height": 1080
+                }
+            }
+        ]
+    }
+    """
+    metadata_file.write_text(metadata_content)
+
+    # Create main recording file
+    main_recording = recording_dir / "sample_recording.mkv"
+    main_recording.touch()
+
+    # Create extracted directory
+    extracted_dir = recording_dir / "extracted"
+    extracted_dir.mkdir()
+
+    # Create extracted files
+    (extracted_dir / "Camera1.mp4").touch()
+    (extracted_dir / "main_audio.m4a").touch()
+
+    return recording_dir
+
+
+@pytest.fixture
+def sample_recording_multiple_audio(tmp_path):
+    """
+    Fixture for sample recording with multiple audio files.
+    Used for testing multiple audio file scenarios.
+    """
+    # Create recording directory
+    recording_dir = tmp_path / "sample_recording_multi"
+    recording_dir.mkdir()
+
+    # Create metadata.json
+    metadata_file = recording_dir / "metadata.json"
+    metadata_content = '{"canvas_size": {"width": 1920, "height": 1080}, "fps": 30}'
+    metadata_file.write_text(metadata_content)
+
+    # Create main recording file
+    main_recording = recording_dir / "sample_recording_multi.mkv"
+    main_recording.touch()
+
+    # Create extracted directory
+    extracted_dir = recording_dir / "extracted"
+    extracted_dir.mkdir()
+
+    # Create extracted files with multiple audio
+    (extracted_dir / "Camera1.mp4").touch()
+    (extracted_dir / "Camera2.mp4").touch()
+    (extracted_dir / "main_audio.m4a").touch()
+    (extracted_dir / "background_audio.mp3").touch()
+
+    return recording_dir
+
+
+@pytest.fixture
+def sample_recording_no_audio(tmp_path):
+    """
+    Fixture for sample recording without audio files.
+    Used for testing no audio file scenarios.
+    """
+    # Create recording directory
+    recording_dir = tmp_path / "sample_recording_no_audio"
+    recording_dir.mkdir()
+
+    # Create metadata.json
+    metadata_file = recording_dir / "metadata.json"
+    metadata_content = '{"canvas_size": {"width": 1920, "height": 1080}, "fps": 30}'
+    metadata_file.write_text(metadata_content)
+
+    # Create main recording file
+    main_recording = recording_dir / "sample_recording_no_audio.mkv"
+    main_recording.touch()
+
+    # Create extracted directory
+    extracted_dir = recording_dir / "extracted"
+    extracted_dir.mkdir()
+
+    # Create only video files
+    (extracted_dir / "Camera1.mp4").touch()
+    (extracted_dir / "Screen.mp4").touch()
+
+    return recording_dir

@@ -205,3 +205,78 @@ class FileStructureManager:
         extracted_dir = FileStructureManager.get_extracted_dir(video_path)
         extracted_dir.mkdir(parents=True, exist_ok=True)
         return extracted_dir
+
+    @staticmethod
+    def ensure_blender_dir(recording_dir: Path) -> Path:
+        """
+        Tworzy katalog blender/ w strukturze nagrania.
+
+        Args:
+            recording_dir: Ścieżka do katalogu nagrania
+
+        Returns:
+            Path: Ścieżka do katalogu blender/
+        """
+        blender_dir = recording_dir / "blender"
+        blender_dir.mkdir(parents=True, exist_ok=True)
+
+        # Utwórz także katalog render/
+        render_dir = blender_dir / "render"
+        render_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Utworzono katalog blender: {blender_dir}")
+        return blender_dir
+
+    @staticmethod
+    def find_audio_files(extracted_dir: Path) -> list[Path]:
+        """
+        Znajduje wszystkie pliki audio w katalogu extracted.
+
+        Args:
+            extracted_dir: Ścieżka do katalogu extracted
+
+        Returns:
+            list[Path]: Lista plików audio
+        """
+        audio_extensions = [".mp3", ".wav", ".flac", ".aac", ".m4a", ".ogg", ".wma"]
+        audio_files = []
+
+        if not extracted_dir.exists():
+            logger.warning(f"Katalog extracted nie istnieje: {extracted_dir}")
+            return audio_files
+
+        for file_path in extracted_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in audio_extensions:
+                audio_files.append(file_path)
+
+        # Sortuj dla spójności
+        audio_files.sort(key=lambda x: x.name)
+        logger.debug(f"Znaleziono {len(audio_files)} plików audio w {extracted_dir}")
+        return audio_files
+
+    @staticmethod
+    def find_video_files(extracted_dir: Path) -> list[Path]:
+        """
+        Znajduje wszystkie pliki wideo w katalogu extracted.
+
+        Args:
+            extracted_dir: Ścieżka do katalogu extracted
+
+        Returns:
+            list[Path]: Lista plików wideo
+        """
+        video_extensions = [".mp4", ".mkv", ".avi", ".mov", ".flv", ".wmv", ".webm"]
+        video_files = []
+
+        if not extracted_dir.exists():
+            logger.warning(f"Katalog extracted nie istnieje: {extracted_dir}")
+            return video_files
+
+        for file_path in extracted_dir.iterdir():
+            if file_path.is_file() and file_path.suffix.lower() in video_extensions:
+                video_files.append(file_path)
+
+        # Sortuj dla spójności
+        video_files.sort(key=lambda x: x.name)
+        logger.debug(f"Znaleziono {len(video_files)} plików wideo w {extracted_dir}")
+        return video_files
