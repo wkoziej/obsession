@@ -40,55 +40,15 @@ except ImportError:
 
 
 # Import file structure manager
-try:
-    from src.core.file_structure import FileStructureManager
-except ImportError:
-    # Fallback for when running in OBS without proper Python path
-    class FileStructureManager:
-        """Fallback implementation for OBS environment."""
+# Direct import for OBS environment
+import sys
 
-        @staticmethod
-        def get_extracted_dir(video_path):
-            """Fallback implementation."""
-            from pathlib import Path
+# Add the core directory to sys.path
+core_dir = Path(__file__).parent.parent / "core"
+if str(core_dir) not in sys.path:
+    sys.path.insert(0, str(core_dir))
 
-            video_path = Path(video_path)
-            return video_path.parent / "extracted"
-
-        @staticmethod
-        def get_metadata_file(video_path):
-            """Fallback implementation."""
-            from pathlib import Path
-
-            video_path = Path(video_path)
-            return video_path.parent / "metadata.json"
-
-        @staticmethod
-        def create_structure(video_path):
-            """Fallback implementation."""
-            from pathlib import Path
-
-            video_path = Path(video_path)
-            recording_dir = video_path.parent
-            extracted_dir = recording_dir / "extracted"
-            extracted_dir.mkdir(parents=True, exist_ok=True)
-
-            # Return simple structure-like object
-            class SimpleStructure:
-                def __init__(
-                    self, recording_dir, video_file, metadata_file, extracted_dir
-                ):
-                    self.recording_dir = recording_dir
-                    self.video_file = video_file
-                    self.metadata_file = metadata_file
-                    self.extracted_dir = extracted_dir
-
-            return SimpleStructure(
-                recording_dir=recording_dir,
-                video_file=video_path,
-                metadata_file=recording_dir / "metadata.json",
-                extracted_dir=extracted_dir,
-            )
+from file_structure import FileStructureManager
 
 
 # Global variables for script state
@@ -510,7 +470,7 @@ def reorganize_files_after_recording(recording_path, metadata_path):
         if not target_recording_path.exists():
             shutil.move(recording_path, target_recording_path)
 
-        # Użyj FileStructureManager do utworzenia struktury
+            # Użyj FileStructureManager do utworzenia struktury
         structure = FileStructureManager.create_structure(target_recording_path)
 
         # Przenieś plik metadanych do właściwego miejsca
