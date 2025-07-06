@@ -282,3 +282,141 @@ class TestFileReorganization:
             # Verify original files were moved
             assert not os.path.exists(recording_path)
             assert not os.path.exists(temp_metadata_path)
+
+    def test_collect_and_save_metadata_with_reorganization(
+        self, mock_obs_functions, mock_obs_scene, mock_obs_source, mock_obs_scene_item
+    ):
+        """Test collect_and_save_metadata with file reorganization."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Setup scene data
+            import src.obs_integration.obs_script as script_module
+
+            script_module.current_scene_data = {
+                "canvas_size": [1920, 1080],
+                "fps": 30.0,
+                "scene_name": "Test Scene",
+            }
+
+            # Setup recording path
+            recording_path = os.path.join(temp_dir, "test_recording.mkv")
+            Path(recording_path).touch()
+
+            # Setup mock returns for OBS functions
+            mock_obs_functions.obs_frontend_get_current_scene.return_value = (
+                mock_obs_scene
+            )
+            mock_obs_functions.obs_scene_from_source.return_value = mock_obs_scene
+            mock_obs_functions.obs_scene_enum_items.return_value = [mock_obs_scene_item]
+            mock_obs_functions.obs_sceneitem_get_source.return_value = mock_obs_source
+            mock_obs_functions.obs_source_get_name.return_value = "Camera1"
+            mock_obs_functions.obs_source_get_id.return_value = "camera_source"
+            mock_obs_functions.obs_source_get_width.return_value = 1920
+            mock_obs_functions.obs_source_get_height.return_value = 1080
+            mock_obs_functions.obs_sceneitem_visible.return_value = True
+            mock_obs_functions.obs_frontend_get_current_record_output_path.return_value = recording_path
+            mock_obs_functions.bfree = Mock()
+
+            # Mock vec2 objects
+            mock_pos = Mock()
+            mock_pos.x = 100
+            mock_pos.y = 50
+            mock_scale = Mock()
+            mock_scale.x = 1.0
+            mock_scale.y = 1.0
+            mock_bounds = Mock()
+            mock_bounds.x = 0
+            mock_bounds.y = 0
+            mock_obs_functions.vec2.return_value = mock_pos
+            mock_obs_functions.obs_sceneitem_get_bounds_type.return_value = 0
+
+            # Set metadata output path to temp directory
+            original_path = script_module.metadata_output_path
+            script_module.metadata_output_path = temp_dir
+
+            try:
+                # Call collect_and_save_metadata
+                from src.obs_integration.obs_script import collect_and_save_metadata
+
+                collect_and_save_metadata()
+
+                # Verify reorganized structure was created
+                expected_dir = os.path.join(temp_dir, "test_recording")
+                assert os.path.exists(expected_dir)
+                assert os.path.exists(os.path.join(expected_dir, "test_recording.mkv"))
+                assert os.path.exists(os.path.join(expected_dir, "metadata.json"))
+                assert os.path.exists(os.path.join(expected_dir, "extracted"))
+
+                # Verify original recording was moved
+                assert not os.path.exists(recording_path)
+
+                # Verify metadata content
+                with open(os.path.join(expected_dir, "metadata.json"), "r") as f:
+                    metadata = json.load(f)
+                assert metadata["scene_name"] == "Test Scene"
+                assert "Camera1" in metadata["sources"]
+
+            finally:
+                # Restore original path
+                script_module.metadata_output_path = original_path
+
+    def test_collect_and_save_metadata_no_recording_path(
+        self, mock_obs_functions, mock_obs_scene, mock_obs_source, mock_obs_scene_item
+    ):
+        """Test collect_and_save_metadata when recording path cannot be obtained."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Setup scene data
+            import src.obs_integration.obs_script as script_module
+
+            script_module.current_scene_data = {
+                "canvas_size": [1920, 1080],
+                "fps": 30.0,
+                "scene_name": "Test Scene",
+            }
+
+            # Setup mock returns for OBS functions
+            mock_obs_functions.obs_frontend_get_current_scene.return_value = (
+                mock_obs_scene
+            )
+            mock_obs_functions.obs_scene_from_source.return_value = mock_obs_scene
+            mock_obs_functions.obs_scene_enum_items.return_value = [mock_obs_scene_item]
+            mock_obs_functions.obs_sceneitem_get_source.return_value = mock_obs_source
+            mock_obs_functions.obs_source_get_name.return_value = "Camera1"
+            mock_obs_functions.obs_source_get_id.return_value = "camera_source"
+            mock_obs_functions.obs_source_get_width.return_value = 1920
+            mock_obs_functions.obs_source_get_height.return_value = 1080
+            mock_obs_functions.obs_sceneitem_visible.return_value = True
+
+            # Mock to return None for recording path
+            mock_obs_functions.obs_frontend_get_current_record_output_path.return_value = None
+
+            # Mock vec2 objects
+            mock_pos = Mock()
+            mock_pos.x = 100
+            mock_pos.y = 50
+            mock_scale = Mock()
+            mock_scale.x = 1.0
+            mock_scale.y = 1.0
+            mock_bounds = Mock()
+            mock_bounds.x = 0
+            mock_bounds.y = 0
+            mock_obs_functions.vec2.return_value = mock_pos
+            mock_obs_functions.obs_sceneitem_get_bounds_type.return_value = 0
+
+            # Set metadata output path to temp directory
+            original_path = script_module.metadata_output_path
+            script_module.metadata_output_path = temp_dir
+
+            try:
+                # Call collect_and_save_metadata
+                from src.obs_integration.obs_script import collect_and_save_metadata
+
+                collect_and_save_metadata()
+
+                # Should fall back to old behavior when recording path not available
+                files = os.listdir(temp_dir)
+                metadata_files = [f for f in files if f.endswith("_metadata.json")]
+                assert len(metadata_files) == 1
+
+            finally:
+                # Restore original path
+                script_module.metadata_output_path = original_path

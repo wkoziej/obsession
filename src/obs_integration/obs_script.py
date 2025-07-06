@@ -88,7 +88,9 @@ def script_defaults(settings):
     obs.obs_data_set_default_bool(settings, "enabled", True)
     obs.obs_data_set_default_string(settings, "output_path", "")
     obs.obs_data_set_default_string(
-        settings, "info", "Metadata will be saved when recording stops."
+        settings,
+        "info",
+        "Metadata will be saved when recording stops. Files are automatically reorganized.",
     )
 
 
@@ -196,6 +198,13 @@ def collect_and_save_metadata():
         print("[Canvas Recorder] No scene data prepared")
         return
 
+    # Get recording path for file reorganization
+    recording_path = get_recording_output_path()
+    if recording_path:
+        print(f"[Canvas Recorder] Recording path obtained: {recording_path}")
+    else:
+        print("[Canvas Recorder] Could not get recording path, using fallback")
+
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
     if current_scene is None:
@@ -287,8 +296,40 @@ def collect_and_save_metadata():
             "total_sources": len(sources),
         }
 
-        # Save metadata to file
-        save_metadata_to_file(metadata)
+        # Save metadata to file and reorganize
+        if recording_path and os.path.exists(recording_path):
+            # Save metadata to temporary file first
+            temp_metadata_path = os.path.join(
+                os.path.dirname(recording_path), "temp_metadata.json"
+            )
+            try:
+                with open(temp_metadata_path, "w", encoding="utf-8") as f:
+                    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+                # Reorganize files
+                reorganized_dir = reorganize_files_after_recording(
+                    recording_path, temp_metadata_path
+                )
+                if reorganized_dir:
+                    print(f"[Canvas Recorder] Files reorganized to: {reorganized_dir}")
+                else:
+                    print(
+                        "[Canvas Recorder] File reorganization failed, using fallback"
+                    )
+                    # Remove temp file and use normal save
+                    if os.path.exists(temp_metadata_path):
+                        os.remove(temp_metadata_path)
+                    save_metadata_to_file(metadata)
+            except Exception as e:
+                print(f"[Canvas Recorder] Error during reorganization: {e}")
+                # Clean up temp file if it exists
+                if os.path.exists(temp_metadata_path):
+                    os.remove(temp_metadata_path)
+                # Fall back to normal save
+                save_metadata_to_file(metadata)
+        else:
+            # Use normal metadata saving
+            save_metadata_to_file(metadata)
 
         print(f"[Canvas Recorder] Collected metadata for {len(sources)} sources")
 

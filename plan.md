@@ -81,12 +81,12 @@ def reorganize_files_after_recording(recording_path, metadata_path):
 - [x] Analiza OBS API
 - [x] Przygotowanie specyfikacji
 - [x] Przygotowanie planu
-- [ ] Przygotowanie testów
+- [x] Przygotowanie testów
 
 ### Tydzień 2: Implementacja core'a
-- [ ] Implementacja funkcji pobierania ścieżki nagrania
-- [ ] Implementacja funkcji reorganizacji
-- [ ] Testy jednostkowe funkcji
+- [x] Implementacja funkcji pobierania ścieżki nagrania
+- [x] Implementacja funkcji reorganizacji
+- [x] Testy jednostkowe funkcji
 
 ### Tydzień 3: Integracja
 - [ ] Modyfikacja obs_script.py
