@@ -267,7 +267,14 @@ def extract_sources(
     if output_dir:
         output_dir_path = Path(output_dir)
     else:
-        output_dir_path = video_path.parent / f"{video_path.stem}_extracted"
+        # Check if we're in new file structure (metadata.json in same directory)
+        metadata_json_path = video_path.parent / "metadata.json"
+        if metadata_json_path.exists():
+            # New structure: use extracted/ subdirectory
+            output_dir_path = video_path.parent / "extracted"
+        else:
+            # Old structure: use {video_name}_extracted/
+            output_dir_path = video_path.parent / f"{video_path.stem}_extracted"
 
     try:
         output_dir_path.mkdir(exist_ok=True, parents=True)

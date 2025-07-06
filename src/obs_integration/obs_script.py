@@ -207,11 +207,21 @@ def collect_and_save_metadata():
         return
 
     # Use recording path captured during recording
-    recording_path = recording_output_path
-    if recording_path:
-        print(f"[Canvas Recorder] Using captured recording path: {recording_path}")
+    output_directory = recording_output_path
+    if output_directory:
+        print(f"[Canvas Recorder] Using captured output directory: {output_directory}")
+        # Znajdź najnowszy plik nagrania w katalogu
+        recording_path = find_latest_recording_file(output_directory)
+        if recording_path:
+            print(f"[Canvas Recorder] Found latest recording: {recording_path}")
+        else:
+            print(
+                "[Canvas Recorder] No recent recording file found in output directory"
+            )
+            recording_path = None
     else:
-        print("[Canvas Recorder] No recording path captured, using fallback")
+        print("[Canvas Recorder] No output directory captured, using fallback")
+        recording_path = None
 
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
@@ -390,13 +400,43 @@ def get_recording_output_path():
     try:
         recording_path = obs.obs_frontend_get_current_record_output_path()
         if recording_path:
-            # Kopiujemy ścieżkę przed zwolnieniem pamięci
-            path_copy = str(recording_path)
-            obs.bfree(recording_path)
-            return path_copy
+            # obs_frontend_get_current_record_output_path() zwraca string, nie pointer
+            # Nie trzeba używać bfree() - to zwraca kopię stringa
+            return str(recording_path) if recording_path else None
         return None
     except Exception as e:
         print(f"[Canvas Recorder] Error getting recording path: {e}")
+        return None
+
+
+def find_latest_recording_file(output_dir):
+    """Znajduje najnowszy plik nagrania w katalogu wyjściowym"""
+    if not output_dir or not os.path.exists(output_dir):
+        return None
+
+    try:
+        # Szukaj plików wideo w katalogu
+        video_extensions = [".mp4", ".mkv", ".flv", ".mov", ".avi"]
+        video_files = []
+
+        for file in os.listdir(output_dir):
+            if any(file.lower().endswith(ext) for ext in video_extensions):
+                file_path = os.path.join(output_dir, file)
+                if os.path.isfile(file_path):
+                    # Sprawdź czy plik jest świeży (utworzony w ciągu ostatnich 30 sekund)
+                    file_age = time.time() - os.path.getmtime(file_path)
+                    if file_age < 30:  # 30 sekund
+                        video_files.append((file_path, os.path.getmtime(file_path)))
+
+        if not video_files:
+            return None
+
+        # Zwróć najnowszy plik
+        latest_file = max(video_files, key=lambda x: x[1])
+        return latest_file[0]
+
+    except Exception as e:
+        print(f"[Canvas Recorder] Error finding latest recording: {e}")
         return None
 
 

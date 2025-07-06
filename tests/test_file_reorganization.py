@@ -27,7 +27,6 @@ class TestFileReorganization:
         mock_obs_functions.obs_frontend_get_current_record_output_path.return_value = (
             "/path/to/recording.mkv"
         )
-        mock_obs_functions.bfree = Mock()
 
         # Call function
         result = get_recording_output_path()
@@ -35,7 +34,7 @@ class TestFileReorganization:
         # Verify result
         assert result == "/path/to/recording.mkv"
         mock_obs_functions.obs_frontend_get_current_record_output_path.assert_called_once()
-        mock_obs_functions.bfree.assert_called_once_with("/path/to/recording.mkv")
+        # bfree() nie jest już wywoływane - obs_frontend_get_current_record_output_path() zwraca string
 
     def test_get_recording_output_path_no_obs(self):
         """Test getting recording output path when OBS is not available."""
@@ -297,9 +296,15 @@ class TestFileReorganization:
                 "scene_name": "Test Scene",
             }
 
-            # Setup recording path
+            # Setup recording path - create a fresh file in temp directory
             recording_path = os.path.join(temp_dir, "test_recording.mkv")
             Path(recording_path).touch()
+
+            # Simulate recent file creation by setting modification time to now
+            import time
+
+            current_time = time.time()
+            os.utime(recording_path, (current_time, current_time))
 
             # Setup mock returns for OBS functions
             mock_obs_functions.obs_frontend_get_current_scene.return_value = (
@@ -313,8 +318,7 @@ class TestFileReorganization:
             mock_obs_functions.obs_source_get_width.return_value = 1920
             mock_obs_functions.obs_source_get_height.return_value = 1080
             mock_obs_functions.obs_sceneitem_visible.return_value = True
-            mock_obs_functions.obs_frontend_get_current_record_output_path.return_value = recording_path
-            mock_obs_functions.bfree = Mock()
+            mock_obs_functions.obs_frontend_get_current_record_output_path.return_value = temp_dir  # Return directory, not file
 
             # Mock vec2 objects
             mock_pos = Mock()
@@ -334,7 +338,7 @@ class TestFileReorganization:
             original_recording_path = script_module.recording_output_path
             script_module.metadata_output_path = temp_dir
             script_module.recording_output_path = (
-                recording_path  # Set captured recording path
+                temp_dir  # Set captured output directory
             )
 
             try:

@@ -3,14 +3,15 @@ Tests for source extraction functionality.
 """
 
 import tempfile
-import os
 from unittest.mock import patch
 from src.core.extractor import (
     ExtractionResult,
     calculate_crop_params,
     sanitize_filename,
-    SourceExtractor,
+    extract_sources,
 )
+from pathlib import Path
+import pytest
 
 
 class TestExtractionResult:
@@ -201,197 +202,236 @@ class TestSanitizeFilename:
 
 
 class TestExtractorWithCapabilities:
-    """Test extractor with new has_audio/has_video logic."""
+    """Test extractor with source capabilities detection."""
 
-    def test_extractor_processes_video_sources(self):
-        """Test that extractor processes sources with has_video=True."""
-        metadata = {
+    @pytest.fixture
+    def sample_metadata(self):
+        """Sample metadata for testing."""
+        return {
             "canvas_size": [1920, 1080],
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
             "sources": {
-                "Camera": {
-                    "has_audio": True,
+                "VideoSource": {
+                    "position": {"x": 100, "y": 200},
+                    "dimensions": {"source_width": 800, "source_height": 600},
+                    "scale": {"x": 1.0, "y": 1.0},
                     "has_video": True,
-                    "position": {"x": 0, "y": 0},
-                },
-                "Microphone": {"has_audio": True, "has_video": False},
-                "TextSource": {
                     "has_audio": False,
-                    "has_video": True,
-                    "position": {"x": 100, "y": 100},
+                },
+                "AudioSource": {
+                    "position": {"x": 0, "y": 0},
+                    "dimensions": {"source_width": 0, "source_height": 0},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": False,
+                    "has_audio": True,
                 },
             },
         }
 
+    def test_extractor_processes_video_sources(self, sample_metadata):
+        """Test that extractor processes video sources correctly."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_file = os.path.join(temp_dir, "input.mkv")
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir)
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
 
-            # Create dummy input file
-            with open(input_file, "w") as f:
-                f.write("dummy")
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
 
-            extractor = SourceExtractor(input_file, metadata, output_dir)
+                result = extract_sources(str(test_video), sample_metadata)
 
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                result = extractor.extract_sources()
-
-                # Should call FFmpeg for:
-                # Camera: video + audio = 2 calls
-                # Microphone: audio only = 1 call
-                # TextSource: video only = 1 call
-                # Total: 4 calls
-                assert mock_run.call_count == 4
                 assert result.success is True
-                assert len(result.extracted_files) == 4
+                assert len(result.extracted_files) == 2  # Video and audio files
+                assert any("VideoSource.mp4" in f for f in result.extracted_files)
+                assert any("AudioSource.m4a" in f for f in result.extracted_files)
 
-                # Check that video sources were processed
-                calls = [call.args[0] for call in mock_run.call_args_list]
-                video_outputs = [
-                    call for call in calls if any(".mp4" in arg for arg in call)
-                ]
-                audio_outputs = [
-                    call for call in calls if any(".m4a" in arg for arg in call)
-                ]
-                assert len(video_outputs) == 2  # Camera, TextSource
-                assert len(audio_outputs) == 2  # Camera, Microphone
-
-    def test_extractor_extracts_audio_tracks(self):
-        """Test that extractor extracts audio tracks from audio sources."""
-        metadata = {
-            "canvas_size": [1920, 1080],
-            "sources": {
-                "Camera": {
-                    "has_audio": True,
-                    "has_video": True,
-                    "position": {"x": 0, "y": 0},
-                },
-                "Microphone": {"has_audio": True, "has_video": False},
-                "ImageSource": {
-                    "has_audio": False,
-                    "has_video": True,
-                    "position": {"x": 100, "y": 100},
-                },
-            },
-        }
-
+    def test_extractor_extracts_audio_tracks(self, sample_metadata):
+        """Test that extractor extracts audio tracks correctly."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_file = os.path.join(temp_dir, "input.mkv")
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir)
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
 
-            with open(input_file, "w") as f:
-                f.write("dummy")
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
 
-            extractor = SourceExtractor(input_file, metadata, output_dir)
+                extract_sources(str(test_video), sample_metadata)
 
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                result = extractor.extract_sources()
-
-                # Check that audio tracks were extracted
-                calls = [call.args[0] for call in mock_run.call_args_list]
-                audio_outputs = [
+                # Check that audio extraction was called
+                audio_calls = [
                     call
-                    for call in calls
-                    if any((".wav" in arg or ".m4a" in arg) for arg in call)
+                    for call in mock_run.call_args_list
+                    if "-vn" in call[0][0]  # Audio extraction flag
                 ]
-                assert len(audio_outputs) == 2  # Camera and Microphone have audio
-                assert result.success is True
+                assert len(audio_calls) == 1
 
     def test_extractor_skips_sources_without_capabilities(self):
-        """Test that sources without audio/video are skipped."""
+        """Test that extractor skips sources without video or audio capabilities."""
         metadata = {
             "canvas_size": [1920, 1080],
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
             "sources": {
-                "ValidCamera": {
-                    "has_audio": True,
-                    "has_video": True,
+                "EmptySource": {
                     "position": {"x": 0, "y": 0},
+                    "dimensions": {"source_width": 100, "source_height": 100},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": False,
+                    "has_audio": False,
                 },
-                "EmptySource": {"has_audio": False, "has_video": False},
             },
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_file = os.path.join(temp_dir, "input.mkv")
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir)
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
 
-            with open(input_file, "w") as f:
-                f.write("dummy")
+            result = extract_sources(str(test_video), metadata)
 
-            extractor = SourceExtractor(input_file, metadata, output_dir)
-
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                result = extractor.extract_sources()
-
-                # Should only process ValidCamera (both video and audio)
-                assert mock_run.call_count == 2  # 1 video + 1 audio
-                assert result.success is True
-                assert len(result.extracted_files) == 2
+            assert result.success is True
+            assert len(result.extracted_files) == 0
 
     def test_extractor_handles_video_only_sources(self):
-        """Test that video-only sources generate only video files."""
+        """Test that extractor handles video-only sources correctly."""
         metadata = {
             "canvas_size": [1920, 1080],
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
             "sources": {
-                "ImageSource": {
-                    "has_audio": False,
-                    "has_video": True,
+                "VideoOnlySource": {
                     "position": {"x": 0, "y": 0},
-                }
+                    "dimensions": {"source_width": 800, "source_height": 600},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": True,
+                    "has_audio": False,
+                },
             },
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_file = os.path.join(temp_dir, "input.mkv")
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir)
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
 
-            with open(input_file, "w") as f:
-                f.write("dummy")
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
 
-            extractor = SourceExtractor(input_file, metadata, output_dir)
+                result = extract_sources(str(test_video), metadata)
 
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                result = extractor.extract_sources()
-
-                # Should only call FFmpeg once for video
-                assert mock_run.call_count == 1
                 assert result.success is True
                 assert len(result.extracted_files) == 1
-                assert result.extracted_files[0].endswith(".mp4")
+                assert "VideoOnlySource.mp4" in result.extracted_files[0]
 
     def test_extractor_handles_audio_only_sources(self):
-        """Test that audio-only sources generate only audio files."""
+        """Test that extractor handles audio-only sources correctly."""
         metadata = {
             "canvas_size": [1920, 1080],
-            "sources": {"Microphone": {"has_audio": True, "has_video": False}},
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
+            "sources": {
+                "AudioOnlySource": {
+                    "position": {"x": 0, "y": 0},
+                    "dimensions": {"source_width": 0, "source_height": 0},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": False,
+                    "has_audio": True,
+                },
+            },
         }
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            input_file = os.path.join(temp_dir, "input.mkv")
-            output_dir = os.path.join(temp_dir, "output")
-            os.makedirs(output_dir)
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
 
-            with open(input_file, "w") as f:
-                f.write("dummy")
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
 
-            extractor = SourceExtractor(input_file, metadata, output_dir)
+                result = extract_sources(str(test_video), metadata)
 
-            with patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                result = extractor.extract_sources()
-
-                # Should only call FFmpeg once for audio
-                assert mock_run.call_count == 1
                 assert result.success is True
                 assert len(result.extracted_files) == 1
-                assert result.extracted_files[0].endswith(".m4a")
+                assert "AudioOnlySource.m4a" in result.extracted_files[0]
+
+    def test_extractor_output_directory_new_structure(self):
+        """Test that extractor uses 'extracted/' directory for new file structure."""
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
+            "sources": {
+                "TestSource": {
+                    "position": {"x": 0, "y": 0},
+                    "dimensions": {"source_width": 800, "source_height": 600},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": True,
+                    "has_audio": False,
+                },
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
+
+            # Create metadata.json to simulate new structure
+            metadata_file = Path(temp_dir) / "metadata.json"
+            metadata_file.touch()
+
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
+
+                result = extract_sources(str(test_video), metadata)
+
+                assert result.success is True
+                assert len(result.extracted_files) == 1
+                # Should use extracted/ directory, not test_video_extracted/
+                assert "/extracted/TestSource.mp4" in result.extracted_files[0]
+
+    def test_extractor_output_directory_old_structure(self):
+        """Test that extractor uses '{video_name}_extracted/' directory for old file structure."""
+        metadata = {
+            "canvas_size": [1920, 1080],
+            "fps": 30.0,
+            "timestamp": 1234567890.0,
+            "sources": {
+                "TestSource": {
+                    "position": {"x": 0, "y": 0},
+                    "dimensions": {"source_width": 800, "source_height": 600},
+                    "scale": {"x": 1.0, "y": 1.0},
+                    "has_video": True,
+                    "has_audio": False,
+                },
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Create test video file
+            test_video = Path(temp_dir) / "test_video.mp4"
+            test_video.touch()
+
+            # No metadata.json to simulate old structure
+
+            # Mock FFmpeg command
+            with patch("src.core.extractor.subprocess.run") as mock_run:
+                mock_run.return_value = None
+
+                result = extract_sources(str(test_video), metadata)
+
+                assert result.success is True
+                assert len(result.extracted_files) == 1
+                # Should use test_video_extracted/ directory
+                assert (
+                    "/test_video_extracted/TestSource.mp4" in result.extracted_files[0]
+                )
 
 
 class TestCropParamsEdgeCases:

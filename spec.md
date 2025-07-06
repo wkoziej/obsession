@@ -19,9 +19,9 @@ Uporządkowanie struktury plików po nagraniu i ekstrakcji - utworzenie jednego 
 ## Funkcjonalność
 
 ### 1. Pobieranie ścieżki nagrania
-- Wykorzystanie `obs_frontend_get_current_record_output_path()` w `obs_script.py`
-- Pobieranie rzeczywistej ścieżki aktualnego nagrania (nie z konfiguracji)
-- Właściwe zarządzanie pamięcią (`bfree()`)
+- Wykorzystanie `obs_frontend_get_current_record_output_path()` w `obs_script.py` - zwraca katalog wyjściowy
+- Po zakończeniu nagrania: wyszukanie najnowszego pliku wideo w katalogu wyjściowym
+- Filtrowanie plików na podstawie czasu modyfikacji (ostatnie 30 sekund)
 
 ### 2. Tworzenie struktury katalogów
 - Tworzenie katalogu głównego na podstawie nazwy pliku nagrania

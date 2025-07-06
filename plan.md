@@ -5,17 +5,13 @@
 ### 1.1 Dodanie funkcji do pobierania ścieżki nagrania
 ```python
 def get_recording_output_path():
-    """Pobiera ścieżkę aktualnego nagrania z OBS API"""
-    if obs is None:
-        return None
+    """Pobiera katalog wyjściowy nagrania z OBS API"""
+    # Zwraca katalog wyjściowy, nie pełną ścieżkę do pliku
     
-    recording_path = obs.obs_frontend_get_current_record_output_path()
-    if recording_path:
-        # Kopiujemy ścieżkę przed zwolnieniem pamięci
-        path_copy = str(recording_path)
-        obs.bfree(recording_path)
-        return path_copy
-    return None
+def find_latest_recording_file(output_dir):
+    """Znajduje najnowszy plik nagrania w katalogu wyjściowym"""
+    # Szuka plików wideo utworzonych w ciągu ostatnich 30 sekund
+    # Zwraca pełną ścieżkę do najnowszego pliku
 ```
 
 ### 1.2 Dodanie funkcji reorganizacji plików
