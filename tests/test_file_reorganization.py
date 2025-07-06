@@ -331,7 +331,11 @@ class TestFileReorganization:
 
             # Set metadata output path to temp directory
             original_path = script_module.metadata_output_path
+            original_recording_path = script_module.recording_output_path
             script_module.metadata_output_path = temp_dir
+            script_module.recording_output_path = (
+                recording_path  # Set captured recording path
+            )
 
             try:
                 # Call collect_and_save_metadata
@@ -356,8 +360,9 @@ class TestFileReorganization:
                 assert "Camera1" in metadata["sources"]
 
             finally:
-                # Restore original path
+                # Restore original paths
                 script_module.metadata_output_path = original_path
+                script_module.recording_output_path = original_recording_path
 
     def test_collect_and_save_metadata_no_recording_path(
         self, mock_obs_functions, mock_obs_scene, mock_obs_source, mock_obs_scene_item
@@ -404,7 +409,9 @@ class TestFileReorganization:
 
             # Set metadata output path to temp directory
             original_path = script_module.metadata_output_path
+            original_recording_path = script_module.recording_output_path
             script_module.metadata_output_path = temp_dir
+            script_module.recording_output_path = None  # No recording path captured
 
             try:
                 # Call collect_and_save_metadata
@@ -418,5 +425,6 @@ class TestFileReorganization:
                 assert len(metadata_files) == 1
 
             finally:
-                # Restore original path
+                # Restore original paths
                 script_module.metadata_output_path = original_path
+                script_module.recording_output_path = original_recording_path

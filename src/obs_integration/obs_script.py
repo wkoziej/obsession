@@ -43,6 +43,7 @@ except ImportError:
 script_enabled = False
 metadata_output_path = ""
 current_scene_data = {}
+recording_output_path = None
 
 
 def script_description():
@@ -152,10 +153,17 @@ def on_event(event):
 
 def prepare_metadata_collection():
     """Prepare for metadata collection when recording starts."""
-    global current_scene_data
+    global current_scene_data, recording_output_path
 
     if obs is None:
         return
+
+    # Get recording path while recording is active
+    recording_output_path = get_recording_output_path()
+    if recording_output_path:
+        print(f"[Canvas Recorder] Recording path captured: {recording_output_path}")
+    else:
+        print("[Canvas Recorder] Could not get recording path during recording")
 
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
@@ -189,7 +197,7 @@ def prepare_metadata_collection():
 
 def collect_and_save_metadata():
     """Collect scene metadata and save to file."""
-    global current_scene_data, metadata_output_path
+    global current_scene_data, metadata_output_path, recording_output_path
 
     if obs is None:
         return
@@ -198,12 +206,12 @@ def collect_and_save_metadata():
         print("[Canvas Recorder] No scene data prepared")
         return
 
-    # Get recording path for file reorganization
-    recording_path = get_recording_output_path()
+    # Use recording path captured during recording
+    recording_path = recording_output_path
     if recording_path:
-        print(f"[Canvas Recorder] Recording path obtained: {recording_path}")
+        print(f"[Canvas Recorder] Using captured recording path: {recording_path}")
     else:
-        print("[Canvas Recorder] Could not get recording path, using fallback")
+        print("[Canvas Recorder] No recording path captured, using fallback")
 
     # Get current scene
     current_scene = obs.obs_frontend_get_current_scene()
@@ -379,13 +387,17 @@ def get_recording_output_path():
     if obs is None:
         return None
 
-    recording_path = obs.obs_frontend_get_current_record_output_path()
-    if recording_path:
-        # Kopiujemy ścieżkę przed zwolnieniem pamięci
-        path_copy = str(recording_path)
-        obs.bfree(recording_path)
-        return path_copy
-    return None
+    try:
+        recording_path = obs.obs_frontend_get_current_record_output_path()
+        if recording_path:
+            # Kopiujemy ścieżkę przed zwolnieniem pamięci
+            path_copy = str(recording_path)
+            obs.bfree(recording_path)
+            return path_copy
+        return None
+    except Exception as e:
+        print(f"[Canvas Recorder] Error getting recording path: {e}")
+        return None
 
 
 def reorganize_files_after_recording(recording_path, metadata_path):
