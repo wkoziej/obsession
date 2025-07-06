@@ -192,22 +192,14 @@ class TestFileReorganization:
                 # Should return None on permission error
                 assert result is None
 
-    def test_save_metadata_to_file_in_new_structure(self):
-        """Test saving metadata in new directory structure."""
+    def test_save_metadata_to_file_fallback_behavior(self):
+        """Test saving metadata fallback behavior (always uses timestamp after refactoring)."""
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Create recording directory structure
-            recording_dir = os.path.join(temp_dir, "recording_2025-01-06_15-30-00")
-            os.makedirs(recording_dir)
-
-            # Create extracted directory to signal new structure
-            extracted_dir = os.path.join(recording_dir, "extracted")
-            os.makedirs(extracted_dir)
-
-            # Set the metadata output path to the recording directory
+            # Set the metadata output path to the temp directory
             import src.obs_integration.obs_script as script_module
 
             original_path = script_module.metadata_output_path
-            script_module.metadata_output_path = recording_dir
+            script_module.metadata_output_path = temp_dir
 
             try:
                 # Test metadata
@@ -223,8 +215,14 @@ class TestFileReorganization:
                 # Save metadata
                 save_metadata_to_file(metadata)
 
-                # Verify metadata.json was created (not timestamped file)
-                metadata_file = os.path.join(recording_dir, "metadata.json")
+                # After refactoring, save_metadata_to_file always uses timestamp for fallback saves
+                # Find the created file with timestamp
+                metadata_files = [
+                    f for f in os.listdir(temp_dir) if f.endswith("_metadata.json")
+                ]
+                assert len(metadata_files) == 1
+
+                metadata_file = os.path.join(temp_dir, metadata_files[0])
                 assert os.path.exists(metadata_file)
 
                 # Verify content

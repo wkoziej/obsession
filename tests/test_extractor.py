@@ -396,8 +396,8 @@ class TestExtractorWithCapabilities:
                 # Should use extracted/ directory, not test_video_extracted/
                 assert "/extracted/TestSource.mp4" in result.extracted_files[0]
 
-    def test_extractor_output_directory_old_structure(self):
-        """Test that extractor uses '{video_name}_extracted/' directory for old file structure."""
+    def test_extractor_output_directory_always_uses_extracted(self):
+        """Test that extractor always uses 'extracted/' directory with FileStructureManager."""
         metadata = {
             "canvas_size": [1920, 1080],
             "fps": 30.0,
@@ -418,8 +418,6 @@ class TestExtractorWithCapabilities:
             test_video = Path(temp_dir) / "test_video.mp4"
             test_video.touch()
 
-            # No metadata.json to simulate old structure
-
             # Mock FFmpeg command
             with patch("src.core.extractor.subprocess.run") as mock_run:
                 mock_run.return_value = None
@@ -428,10 +426,8 @@ class TestExtractorWithCapabilities:
 
                 assert result.success is True
                 assert len(result.extracted_files) == 1
-                # Should use test_video_extracted/ directory
-                assert (
-                    "/test_video_extracted/TestSource.mp4" in result.extracted_files[0]
-                )
+                # Should always use extracted/ directory with FileStructureManager
+                assert "/extracted/TestSource.mp4" in result.extracted_files[0]
 
 
 class TestCropParamsEdgeCases:

@@ -6,6 +6,7 @@ Tests for updated file finding logic that works with new directory structure.
 import os
 import tempfile
 import time
+import json
 from pathlib import Path
 from unittest.mock import patch, Mock
 
@@ -31,7 +32,9 @@ class TestAdvancedSceneSwitcherExtractor:
             recording_file.touch()
 
             # Create metadata.json and extracted/ to confirm it's new structure
-            (recording_dir / "metadata.json").touch()
+            metadata_content = {"sources": {}, "canvas_size": [1920, 1080]}
+            with open(recording_dir / "metadata.json", "w") as f:
+                json.dump(metadata_content, f)
             (recording_dir / "extracted").mkdir()
 
             # Mock Path.home() to return our temp directory
@@ -80,7 +83,9 @@ class TestAdvancedSceneSwitcherExtractor:
             recording_dir.mkdir()
             new_file = recording_dir / "recording_2025-01-06_15-30-00.mkv"
             new_file.touch()
-            (recording_dir / "metadata.json").touch()
+            metadata_content = {"sources": {}, "canvas_size": [1920, 1080]}
+            with open(recording_dir / "metadata.json", "w") as f:
+                json.dump(metadata_content, f)
             (recording_dir / "extracted").mkdir()
 
             with patch("pathlib.Path.home") as mock_home:
@@ -92,27 +97,26 @@ class TestAdvancedSceneSwitcherExtractor:
                 assert result is not None
                 assert "recording_2025-01-06_15-30-00.mkv" in result
 
-    def test_find_latest_recording_no_metadata_fallback(self):
-        """Test finding recording in directory without metadata (old structure)."""
+    def test_find_latest_recording_no_metadata_no_result(self):
+        """Test that directories without metadata.json are ignored (new structure only)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             videos_dir = Path(temp_dir) / "Videos" / "obs"
             videos_dir.mkdir(parents=True)
 
-            # Create directory without metadata.json (old structure)
+            # Create directory without metadata.json (old structure - no longer supported)
             recording_dir = videos_dir / "some_recording"
             recording_dir.mkdir()
             recording_file = recording_dir / "some_recording.mkv"
             recording_file.touch()
-            # No metadata.json or extracted/ - old structure
+            # No metadata.json or extracted/ - old structure not supported
 
             with patch("pathlib.Path.home") as mock_home:
                 mock_home.return_value = Path(temp_dir)
 
                 result = find_latest_recording()
 
-                # Should still find the file
-                assert result is not None
-                assert "some_recording.mkv" in result
+                # Should return None as old structure is not supported
+                assert result is None
 
     def test_find_latest_recording_multiple_new_structure(self):
         """Test finding latest recording among multiple new structure directories."""
@@ -133,7 +137,9 @@ class TestAdvancedSceneSwitcherExtractor:
 
                 recording_file = recording_dir / f"{recording_name}.mkv"
                 recording_file.touch()
-                (recording_dir / "metadata.json").touch()
+                metadata_content = {"sources": {}, "canvas_size": [1920, 1080]}
+                with open(recording_dir / "metadata.json", "w") as f:
+                    json.dump(metadata_content, f)
                 (recording_dir / "extracted").mkdir()
 
                 # Make each subsequent recording newer
@@ -160,7 +166,9 @@ class TestAdvancedSceneSwitcherExtractor:
             recording_dir.mkdir()
             recording_file = recording_dir / "recording_2025-01-06_15-30-00.mkv"
             recording_file.touch()
-            (recording_dir / "metadata.json").touch()
+            metadata_content = {"sources": {}, "canvas_size": [1920, 1080]}
+            with open(recording_dir / "metadata.json", "w") as f:
+                json.dump(metadata_content, f)
             (recording_dir / "extracted").mkdir()
 
             # Make it old (more than 30 seconds)
@@ -196,7 +204,10 @@ class TestAdvancedSceneSwitcherExtractor:
             recording_dir.mkdir()
             recording_file = recording_dir / "recording_2025-01-06_15-30-00.mkv"
             recording_file.touch()
-            (recording_dir / "metadata.json").touch()
+            # Create valid metadata.json
+            metadata_content = {"sources": {}, "canvas_size": [1920, 1080]}
+            with open(recording_dir / "metadata.json", "w") as f:
+                json.dump(metadata_content, f)
             (recording_dir / "extracted").mkdir()
 
             # Mock subprocess.run
