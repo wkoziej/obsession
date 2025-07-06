@@ -53,7 +53,6 @@ from file_structure import FileStructureManager
 
 # Global variables for script state
 script_enabled = False
-metadata_output_path = ""
 current_scene_data = {}
 recording_output_path = None
 
@@ -77,16 +76,6 @@ def script_properties():
     # Enable/disable script
     obs.obs_properties_add_bool(props, "enabled", "Enable metadata collection")
 
-    # Output path for metadata
-    obs.obs_properties_add_path(
-        props,
-        "output_path",
-        "Metadata output directory",
-        obs.OBS_PATH_DIRECTORY,
-        "",
-        "",
-    )
-
     # Add info text
     obs.obs_properties_add_text(props, "info", "Info", obs.OBS_TEXT_INFO)
 
@@ -99,7 +88,6 @@ def script_defaults(settings):
         return
 
     obs.obs_data_set_default_bool(settings, "enabled", True)
-    obs.obs_data_set_default_string(settings, "output_path", "")
     obs.obs_data_set_default_string(
         settings,
         "info",
@@ -109,16 +97,14 @@ def script_defaults(settings):
 
 def script_update(settings):
     """Called when script properties are updated."""
-    global script_enabled, metadata_output_path
+    global script_enabled
 
     if obs is None:
         return
 
     script_enabled = obs.obs_data_get_bool(settings, "enabled")
-    metadata_output_path = obs.obs_data_get_string(settings, "output_path")
 
     print(f"[Canvas Recorder] Script enabled: {script_enabled}")
-    print(f"[Canvas Recorder] Output path: {metadata_output_path}")
 
 
 def script_load(settings):
@@ -209,7 +195,7 @@ def prepare_metadata_collection():
 
 def collect_and_save_metadata():
     """Collect scene metadata and save to file."""
-    global current_scene_data, metadata_output_path, recording_output_path
+    global current_scene_data, recording_output_path
 
     if obs is None:
         return
@@ -372,20 +358,22 @@ def collect_and_save_metadata():
 
 
 def save_metadata_to_file(metadata: Dict[str, Any]):
-    """Save metadata to JSON file using FileStructureManager."""
-    global metadata_output_path
+    """Save metadata to JSON file as fallback when reorganization fails."""
+    global recording_output_path
 
-    if not metadata_output_path:
-        # Use default path relative to OBS
-        metadata_output_path = os.path.expanduser("~/obs-canvas-metadata")
+    # Use recording output path if available, otherwise use default
+    if recording_output_path:
+        output_dir = recording_output_path
+    else:
+        output_dir = os.path.expanduser("~/obs-canvas-metadata")
 
     # Ensure directory exists
-    os.makedirs(metadata_output_path, exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     # Always use timestamp for fallback saves (when reorganization fails)
     timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
     filename = f"{timestamp}_metadata.json"
-    filepath = os.path.join(metadata_output_path, filename)
+    filepath = os.path.join(output_dir, filename)
 
     try:
         with open(filepath, "w", encoding="utf-8") as f:

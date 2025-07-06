@@ -115,36 +115,42 @@ class TestOBSScript:
         """Test metadata saving to file."""
         # Create temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Set output path
+            # Set recording output path
             import src.obs_integration.obs_script as script_module
 
-            script_module.metadata_output_path = temp_dir
+            # Save original path
+            original_path = script_module.recording_output_path
+            script_module.recording_output_path = temp_dir
 
-            # Test metadata
-            metadata = {
-                "canvas_size": [1920, 1080],
-                "fps": 30.0,
-                "sources": {
-                    "Camera1": {"name": "Camera1", "position": {"x": 0, "y": 0}}
-                },
-                "scene_name": "Test Scene",
-            }
+            try:
+                # Test metadata
+                metadata = {
+                    "canvas_size": [1920, 1080],
+                    "fps": 30.0,
+                    "sources": {
+                        "Camera1": {"name": "Camera1", "position": {"x": 0, "y": 0}}
+                    },
+                    "scene_name": "Test Scene",
+                }
 
-            # Save metadata
-            save_metadata_to_file(metadata)
+                # Save metadata
+                save_metadata_to_file(metadata)
 
-            # Verify file was created
-            files = os.listdir(temp_dir)
-            assert len(files) == 1
-            assert files[0].endswith("_metadata.json")
+                # Verify file was created
+                files = os.listdir(temp_dir)
+                assert len(files) == 1
+                assert files[0].endswith("_metadata.json")
 
-            # Verify file content
-            with open(os.path.join(temp_dir, files[0]), "r") as f:
-                saved_metadata = json.load(f)
+                # Verify file content
+                with open(os.path.join(temp_dir, files[0]), "r") as f:
+                    saved_metadata = json.load(f)
 
-            assert saved_metadata["canvas_size"] == [1920, 1080]
-            assert saved_metadata["fps"] == 30.0
-            assert "Camera1" in saved_metadata["sources"]
+                assert saved_metadata["canvas_size"] == [1920, 1080]
+                assert saved_metadata["fps"] == 30.0
+                assert "Camera1" in saved_metadata["sources"]
+            finally:
+                # Restore original path
+                script_module.recording_output_path = original_path
 
     def test_collect_and_save_metadata_no_scene_data(self):
         """Test collect metadata when no scene data is prepared."""
