@@ -15,19 +15,14 @@ from pathlib import Path
 
 def log_message(message):
     """Log message with timestamp"""
-    log_file = Path("/tmp/obsession_auto_extract.log")
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    with open(log_file, "a") as f:
-        f.write(f"[{timestamp}] {message}\n")
-
     print(f"[{timestamp}] {message}")
 
 
 def find_latest_recording():
     """
-    Find the most recent OBS recording file.
-    Checks common OBS recording locations and formats.
+    Find the most recent OBS recording file in new reorganized directory structure.
+    Looks for recording files inside recording_name/ directories with metadata.json.
     """
     # Common OBS recording directories
     possible_dirs = [
@@ -43,24 +38,45 @@ def find_latest_recording():
     for directory in possible_dirs:
         if directory.exists():
             log_message(f"Checking directory: {directory}")
+
+            # Look for reorganized structure: recording_name/recording_name.ext
+            for item in directory.iterdir():
+                if item.is_dir():
+                    # Check if this directory has the new structure (metadata.json present)
+                    metadata_file = item / "metadata.json"
+                    if metadata_file.exists():
+                        log_message(f"  Found reorganized directory: {item}")
+
+                        # Look for recording files in this directory
+                        for ext in extensions:
+                            pattern = str(item / ext)
+                            files = glob.glob(pattern)
+                            log_message(
+                                f"    Pattern {pattern}: found {len(files)} files"
+                            )
+                            if files:
+                                log_message(f"      Files: {files}")
+                                all_files.extend(files)
+                    else:
+                        # Directory without metadata.json - could be old structure, check anyway
+                        log_message(f"  Checking directory without metadata: {item}")
+                        for ext in extensions:
+                            pattern = str(item / ext)
+                            files = glob.glob(pattern)
+                            if files:
+                                log_message(
+                                    f"    Found files in old structure: {files}"
+                                )
+                                all_files.extend(files)
+
+            # Also check for direct files in the main directory (old structure fallback)
             for ext in extensions:
-                # Check both direct files and files in subdirectories
                 pattern = str(directory / ext)
                 files = glob.glob(pattern)
-                log_message(f"  Pattern {pattern}: found {len(files)} files")
                 if files:
-                    log_message(f"    Files: {files}")
-                all_files.extend(files)
+                    log_message(f"  Found direct files: {files}")
+                    all_files.extend(files)
 
-                # Also check subdirectories recursively
-                pattern_recursive = str(directory / "**" / ext)
-                files_recursive = glob.glob(pattern_recursive, recursive=True)
-                log_message(
-                    f"  Recursive pattern {pattern_recursive}: found {len(files_recursive)} files"
-                )
-                if files_recursive:
-                    log_message(f"    Files: {files_recursive}")
-                all_files.extend(files_recursive)
         else:
             log_message(f"Directory does not exist: {directory}")
 
@@ -73,8 +89,7 @@ def find_latest_recording():
     # Find the newest file
     latest_file = max(all_files, key=os.path.getmtime)
 
-    # Check if file was created in the last 2 minutes (fresh recording)
-    # Extended from 30 seconds to 2 minutes to account for file writing time
+    # Check if file was created in the last 30 seconds (fresh recording)
     file_age = time.time() - os.path.getmtime(latest_file)
 
     log_message(f"Latest file: {latest_file}")

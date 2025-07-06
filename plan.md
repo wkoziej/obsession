@@ -89,7 +89,7 @@ def reorganize_files_after_recording(recording_path, metadata_path):
 - [x] Testy jednostkowe funkcji
 
 ### Tydzień 3: Integracja
-- [ ] Modyfikacja obs_script.py
+- [x] Modyfikacja obs_script.py
 - [ ] Modyfikacja advanced_scene_switcher_extractor.py
 - [ ] Modyfikacja extract.py
 - [ ] Testy integracyjne
