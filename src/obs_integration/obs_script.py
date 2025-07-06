@@ -7,6 +7,8 @@ when recording stops.
 import os
 import json
 import time
+import shutil
+from pathlib import Path
 from typing import Dict, Any
 
 try:
@@ -309,9 +311,16 @@ def save_metadata_to_file(metadata: Dict[str, Any]):
     # Ensure directory exists
     os.makedirs(metadata_output_path, exist_ok=True)
 
-    # Generate filename with timestamp
-    timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
-    filename = f"{timestamp}_metadata.json"
+    # Check if we're in a reorganized structure (directory contains extracted/ subdirectory)
+    extracted_dir = os.path.join(metadata_output_path, "extracted")
+    if os.path.exists(extracted_dir):
+        # New structure - save as metadata.json
+        filename = "metadata.json"
+    else:
+        # Old structure - save with timestamp
+        timestamp = time.strftime("%Y-%m-%d %H-%M-%S")
+        filename = f"{timestamp}_metadata.json"
+
     filepath = os.path.join(metadata_output_path, filename)
 
     try:
@@ -322,6 +331,64 @@ def save_metadata_to_file(metadata: Dict[str, Any]):
 
     except Exception as e:
         print(f"[Canvas Recorder] Error saving metadata: {e}")
+
+
+def get_recording_output_path():
+    """Pobiera ścieżkę aktualnego nagrania z OBS API"""
+    if obs is None:
+        return None
+
+    recording_path = obs.obs_frontend_get_current_record_output_path()
+    if recording_path:
+        # Kopiujemy ścieżkę przed zwolnieniem pamięci
+        path_copy = str(recording_path)
+        obs.bfree(recording_path)
+        return path_copy
+    return None
+
+
+def reorganize_files_after_recording(recording_path, metadata_path):
+    """Reorganizuje pliki po nagraniu - tworzy strukturę katalogów"""
+    try:
+        # Sprawdź czy pliki istnieją
+        if not os.path.exists(recording_path):
+            print(f"[Canvas Recorder] Recording file not found: {recording_path}")
+            return None
+
+        if not os.path.exists(metadata_path):
+            print(f"[Canvas Recorder] Metadata file not found: {metadata_path}")
+            return None
+
+        # Pobierz nazwę pliku bez rozszerzenia
+        recording_file = Path(recording_path)
+        directory_name = recording_file.stem
+
+        # Utwórz katalog docelowy w tym samym miejscu co nagranie
+        target_dir = recording_file.parent / directory_name
+
+        # Utwórz katalog jeśli nie istnieje
+        target_dir.mkdir(exist_ok=True)
+
+        # Utwórz podkatalog extracted
+        extracted_dir = target_dir / "extracted"
+        extracted_dir.mkdir(exist_ok=True)
+
+        # Przenieś plik nagrania
+        target_recording_path = target_dir / recording_file.name
+        if not target_recording_path.exists():
+            shutil.move(recording_path, target_recording_path)
+
+        # Przenieś plik metadanych jako metadata.json
+        target_metadata_path = target_dir / "metadata.json"
+        if not target_metadata_path.exists():
+            shutil.move(metadata_path, target_metadata_path)
+
+        print(f"[Canvas Recorder] Files reorganized to: {target_dir}")
+        return str(target_dir)
+
+    except Exception as e:
+        print(f"[Canvas Recorder] Error reorganizing files: {e}")
+        return None
 
 
 # For testing purposes when running outside OBS
