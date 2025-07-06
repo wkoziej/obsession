@@ -6,28 +6,61 @@ Automatically finds the latest recording and triggers extraction.
 
 import sys
 import os
-import glob
 import datetime
 import subprocess
 import time
 from pathlib import Path
 
+# Add src directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+try:
+    from core.file_structure import FileStructureManager
+except ImportError:
+    # Fallback if import fails
+    class FileStructureManager:
+        @staticmethod
+        def find_recording_structure(base_path):
+            """Fallback implementation."""
+            metadata_file = base_path / "metadata.json"
+            if metadata_file.exists():
+                # Find video file in the same directory
+                video_extensions = [
+                    ".mkv",
+                    ".mp4",
+                    ".avi",
+                    ".mov",
+                    ".flv",
+                    ".wmv",
+                    ".webm",
+                ]
+                for file_path in base_path.iterdir():
+                    if (
+                        file_path.is_file()
+                        and file_path.suffix.lower() in video_extensions
+                    ):
+                        return type(
+                            "Structure",
+                            (),
+                            {
+                                "video_file": file_path,
+                                "metadata_file": metadata_file,
+                                "recording_dir": base_path,
+                            },
+                        )()
+            return None
+
 
 def log_message(message):
     """Log message with timestamp"""
-    log_file = Path("/tmp/obsession_auto_extract.log")
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    with open(log_file, "a") as f:
-        f.write(f"[{timestamp}] {message}\n")
-
     print(f"[{timestamp}] {message}")
 
 
 def find_latest_recording():
     """
-    Find the most recent OBS recording file.
-    Checks common OBS recording locations and formats.
+    Find the most recent OBS recording file using FileStructureManager.
+    Looks for recording files inside recording_name/ directories with metadata.json.
     """
     # Common OBS recording directories
     possible_dirs = [
@@ -35,56 +68,53 @@ def find_latest_recording():
         Path.home() / "Videos" / "obs",  # Videos/obs subdirectory
     ]
 
-    # Common OBS recording formats
-    extensions = ["*.mkv", "*.mp4", "*.flv", "*.mov"]
-
-    all_files = []
+    all_structures = []
 
     for directory in possible_dirs:
         if directory.exists():
             log_message(f"Checking directory: {directory}")
-            for ext in extensions:
-                # Check both direct files and files in subdirectories
-                pattern = str(directory / ext)
-                files = glob.glob(pattern)
-                log_message(f"  Pattern {pattern}: found {len(files)} files")
-                if files:
-                    log_message(f"    Files: {files}")
-                all_files.extend(files)
 
-                # Also check subdirectories recursively
-                pattern_recursive = str(directory / "**" / ext)
-                files_recursive = glob.glob(pattern_recursive, recursive=True)
-                log_message(
-                    f"  Recursive pattern {pattern_recursive}: found {len(files_recursive)} files"
-                )
-                if files_recursive:
-                    log_message(f"    Files: {files_recursive}")
-                all_files.extend(files_recursive)
+            # Look for recording structures using FileStructureManager
+            for item in directory.iterdir():
+                if item.is_dir():
+                    log_message(f"  Checking subdirectory: {item}")
+
+                    # Use FileStructureManager to find valid recording structure
+                    try:
+                        structure = FileStructureManager.find_recording_structure(item)
+                        if structure:
+                            log_message(
+                                f"    Found valid recording structure: {structure.video_file}"
+                            )
+                            all_structures.append(structure)
+                        else:
+                            log_message("    No valid recording structure found")
+                    except Exception as e:
+                        log_message(f"    Error checking structure: {e}")
+
         else:
             log_message(f"Directory does not exist: {directory}")
 
-    log_message(f"Total files found: {len(all_files)}")
+    log_message(f"Total recording structures found: {len(all_structures)}")
 
-    if not all_files:
-        log_message("No recording files found")
+    if not all_structures:
+        log_message("No recording structures found")
         return None
 
-    # Find the newest file
-    latest_file = max(all_files, key=os.path.getmtime)
+    # Find the newest recording file
+    latest_structure = max(all_structures, key=lambda s: os.path.getmtime(s.video_file))
 
-    # Check if file was created in the last 2 minutes (fresh recording)
-    # Extended from 30 seconds to 2 minutes to account for file writing time
-    file_age = time.time() - os.path.getmtime(latest_file)
+    # Check if file was created in the last 30 seconds (fresh recording)
+    file_age = time.time() - os.path.getmtime(latest_structure.video_file)
 
-    log_message(f"Latest file: {latest_file}")
+    log_message(f"Latest recording: {latest_structure.video_file}")
     log_message(f"File age: {file_age:.1f} seconds")
 
     if file_age > 30:
         log_message("File too old, probably not the recording we want")
         return None
 
-    return latest_file
+    return str(latest_structure.video_file)
 
 
 def run_extraction(recording_file):

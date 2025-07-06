@@ -8,6 +8,8 @@ import subprocess
 from typing import List, Optional, Dict, Any
 from pathlib import Path
 
+from core.file_structure import FileStructureManager
+
 
 class ExtractionResult:
     """
@@ -262,12 +264,13 @@ def extract_sources(
     if not sources:
         return ExtractionResult(success=True, extracted_files=[])
 
-    # Create output directory
+    # Create output directory using FileStructureManager
     video_path = Path(video_file)
     if output_dir:
         output_dir_path = Path(output_dir)
     else:
-        output_dir_path = video_path.parent / f"{video_path.stem}_extracted"
+        # Use FileStructureManager to determine output directory
+        output_dir_path = FileStructureManager.get_extracted_dir(video_path)
 
     try:
         output_dir_path.mkdir(exist_ok=True, parents=True)

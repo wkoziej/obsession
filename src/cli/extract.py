@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from core.extractor import extract_sources
+from core.file_structure import FileStructureManager
 
 
 def parse_args(args: Optional[List[str]] = None) -> argparse.Namespace:
@@ -115,7 +116,7 @@ def wait_for_file_ready(file_path: Path, max_wait: int = 30) -> bool:
 
 def find_metadata_file(video_path: Path) -> Optional[Path]:
     """
-    Try to find corresponding metadata file for the video.
+    Try to find corresponding metadata file for the video using FileStructureManager.
 
     Args:
         video_path: Path to the video file
@@ -123,14 +124,29 @@ def find_metadata_file(video_path: Path) -> Optional[Path]:
     Returns:
         Path to metadata file if found, None otherwise
     """
+    print(f"Searching for metadata file for: {video_path}")
+
+    # First, try to find metadata file using FileStructureManager
+    # This handles the new structure where metadata.json is in the same directory as video
+    try:
+        structure = FileStructureManager.find_recording_structure(video_path.parent)
+        if structure and structure.metadata_file.exists():
+            print(
+                f"Found metadata file using FileStructureManager: {structure.metadata_file}"
+            )
+            return structure.metadata_file
+    except Exception as e:
+        print(f"Error using FileStructureManager: {e}")
+
+    # Fallback to legacy patterns for backward compatibility
     video_stem = video_path.stem
     video_dir = video_path.parent
 
-    print(f"Searching for metadata file for: {video_path}")
+    print("Falling back to legacy pattern matching...")
     print(f"Video stem: {video_stem}")
     print(f"Video directory: {video_dir}")
 
-    # Common metadata file patterns
+    # Common metadata file patterns (legacy)
     patterns = [
         f"{video_stem}.json",
         f"{video_stem}_metadata.json",
