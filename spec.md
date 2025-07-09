@@ -1,225 +1,117 @@
-# Specyfikacja: Generator Projektów Blender VSE
+# Specyfikacja PoC: Animacje w Blender VSE oparte na analizie audio
 
-## 📋 Przegląd
+## 1. Cel PoC
 
-System automatycznego generowania projektów Blender VSE (Video Sequence Editor) z wyekstraktowanych nagrań OBS Canvas Recorder. Narzędzie tworzy gotowy do renderingu projekt Blender z uporządkowanymi ścieżkami wideo i audio.
+Zademonstrowanie możliwości automatycznego tworzenia animacji PiP (Picture-in-Picture) w Blender VSE, które są zsynchronizowane z muzyką na podstawie analizy audio.
 
-## 🎯 Cel
+## 2. Zakres funkcjonalny
 
-Automatyczne przygotowanie pliku `.blend` zawierającego:
-- Wyekstraktowane pliki wideo na osobnych ścieżkach VSE
-- Główną ścieżkę audio z oryginalnego nagrania canvas na ścieżce VSE
-- Skonfigurowane parametry renderingu (720p, MP4)
-- Ustawioną ścieżkę wyjściową renderingu
+### 2.1 Analiza audio
+- Wykrywanie bitów i tempa (BPM)
+- Identyfikacja granic sekcji muzycznych
+- Analiza energii w pasmach częstotliwości (bass, mid, high)
+- Detekcja onsetów (początków dźwięków)
+- Generowanie eventów animacji na podstawie analizy
 
-## 📁 Struktura Wejściowa
+### 2.2 Integracja z Blender VSE
+- Rozszerzenie istniejącego skryptu `blender_vse_script.py`
+- Dodanie animacji PiP dla źródeł wideo
+- Synchronizacja przełączeń/efektów z eventami audio
 
-```
-nazwa_nagrania/
-├── nazwa_nagrania.mkv          # Oryginalne nagranie canvas
-├── metadata.json               # Metadane sceny
-└── extracted/                  # Wyekstraktowane pliki
-    ├── Camera1.mp4             # Video z Camera1
-    ├── Main audio.m4a          # Audio wekstrachowane z Canvas
-    ├── ScreenCapture.mp4       # Video z ScreenCapture
-    └── ...
-```
+### 2.3 Tryby animacji PiP
+1. **Beat Switch Mode** - przełączanie aktywnego PiP co N bitów
+2. **Energy Pulse Mode** - pulsowanie rozmiaru PiP w rytm basu
+3. **Section Transition Mode** - płynne przejścia na granicach sekcji
+4. **Multi-PiP Mode** - wszystkie PiP widoczne, różne efekty dla każdego
 
-## 📁 Struktura Wyjściowa
+## 3. Wymagania techniczne
 
-```
-nazwa_nagrania/
-├── nazwa_nagrania.mkv          # Oryginalne nagranie
-├── metadata.json               # Metadane
-├── extracted/                  # Wyekstraktowane pliki
-└── blender/                    # ← Nowy katalog
-    ├── nazwa_nagrania.blend    # Projekt Blender
-    └── render/                 # Katalog docelowy renderingu
-```
+### 3.1 Zależności
+- Python 3.9+ (kompatybilny z OBS)
+- librosa (analiza audio)
+- numpy, scipy (obliczenia)
+- Blender 3.0+ (VSE z Python API)
 
-## 🎬 Konfiguracja VSE
+### 3.2 Format danych
+- Wejście: plik audio (z extracted/ lub main recording)
+- Analiza: JSON z eventami i danymi czasowymi
+- Wyjście: projekt .blend z animacjami
 
-### Ścieżki Video (Channels)
-- **Channel 1**: Pierwszy plik wideo (.mp4)
-- **Channel 2**: Drugi plik wideo (.mp4)
-- **Channel N**: N-ty plik wideo (.mp4)
+### 3.3 Ograniczenia PoC
+- Maksymalnie 4 źródła PiP
+- Tylko podstawowe efekty (pozycja, skala, przezroczystość)
+- Brak złożonych przejść czy efektów cząsteczkowych
 
-### Ścieżki Audio (Channels)
-- **Channel 1**: Główna ścieżka audio z canvas (`audio_main.m4a`)
+## 4. Kryteria sukcesu
 
-### Timing
-- **Start Frame**: Wszystkie ścieżki zaczynają się od frame 1
-- **Długość**: Bazowana na długości głównej ścieżki audio
-- **FPS**: Z metadata.json lub domyślnie 30fps
+1. **Funkcjonalność**
+   - ✓ Analiza audio generuje prawidłowe eventy
+   - ✓ Blender tworzy animacje na podstawie eventów
+   - ✓ Animacje są zsynchronizowane z muzyką
 
-## ⚙️ Parametry Renderingu
+2. **Widoczność dla operatora**
+   - ✓ Operator widzi wszystkie źródła w Blenderze
+   - ✓ Może podglądać animacje w czasie rzeczywistym
+   - ✓ Może modyfikować parametry animacji
 
-### Rozdzielczość
-- **Preset**: HD 720p (1280x720)
-- **Aspect Ratio**: 16:9
+3. **Integracja**
+   - ✓ Działa z istniejącą strukturą projektu
+   - ✓ Nie wymaga zmian w OBS script
+   - ✓ Wykorzystuje istniejące extracted sources
 
-### Format Wyjściowy
-- **Container**: MP4
-- **Video Codec**: H.264
-- **Audio Codec**: AAC
-- **Quality**: High (CRF 18)
+## 5. Przypadki użycia
 
-### Ścieżka Wyjściowa
-- **Katalog**: `{nazwa_nagrania}/blender/render/`
-- **Nazwa pliku**: `{nazwa_nagrania}_final.mp4`
+### UC1: Automatyczna animacja koncertu
+- Wejście: nagranie z 3 kamer + główny audio
+- Proces: analiza audio → generowanie eventów → animacje PiP
+- Wyjście: dynamiczny montaż z przełączaniem kamer w rytm
 
-## 🔧 Interface CLI
+### UC2: Podcast z reakcjami
+- Wejście: 2 źródła (host + gość) + audio
+- Proces: detekcja mowy → podświetlanie aktywnego mówcy
+- Wyjście: automatyczne focus na mówiącego
 
-### Komenda
+### UC3: Gameplay z komentarzem
+- Wejście: gameplay + kamera gracza + audio
+- Proces: analiza energii → PiP reaguje na emocje
+- Wyjście: dynamiczne pojawianie się gracza w momentach akcji
+
+## 6. Interfejs użytkownika
+
+### 6.1 CLI
 ```bash
-python -m cli.blend_setup <katalog_nagrania>
+# Analiza audio
+python -m cli.analyze_audio recording_20250105_143022/main_audio.m4a
+
+# Tworzenie projektu z animacjami
+python -m cli.blend_setup recording_20250105_143022 --with-audio-animation
+
+# Wybór trybu animacji
+python -m cli.blend_setup recording_20250105_143022 --animation-mode beat-switch
 ```
 
-### Przykład użycia
-```bash
-# Podstawowe użycie
-python -m cli.blend_setup ./recording_20250105_143022
+### 6.2 Parametry w Blenderze
+- Slider: Beat Division (co ile bitów przełączać)
+- Slider: Energy Threshold (próg reakcji na bas)
+- Checkbox: Enable/Disable dla każdego trybu
+- Preview button: podgląd 10s animacji
 
-# Z verbose output
-python -m cli.blend_setup ./recording_20250105_143022 --verbose
+## 7. Przykładowe eventy animacji
 
-# Pomoc
-python -m cli.blend_setup --help
-
-# Ścieżka do głóœnego audio
-python -m cli.blend_setup --main-audio main_audio.m4a
-
+```json
+{
+  "animation_events": {
+    "beats": [0.5, 1.0, 1.5, 2.0],  // co 8 bitów
+    "sections": [0.0, 32.5, 64.2],   // granice części
+    "energy_peaks": [2.3, 8.7, 15.2], // szczyty basu
+    "onsets": [0.1, 2.1, 4.2]        // filtrowane onsety
+  }
+}
 ```
 
-### Argumenty
-- `recording_dir`: Ścieżka do katalogu nagrania (wymagane)
-- `--verbose, -v`: Szczegółowe logowanie (opcjonalne)
-- `--force, -f`: Nadpisz istniejący plik .blend (opcjonalne)
+## 8. Metryki wydajności
 
-## 📊 Wymagania Funkcjonalne
-
-### RF-001: Walidacja Struktury
-- System musi sprawdzić czy katalog zawiera wymaganą strukturę
-- Musi istnieć plik `metadata.json` i katalog `extracted/`
-- Musi istnieć co najmniej jeden plik wideo lub audio w `extracted/`
-
-### RF-002: Główne Audio z Canvas
-- System zna główną ścieżkę audio z oryginalnego nagrania - jeżeli plików audio w katalogu extracted jest więcej niż jeden - zgłasza błąd i wymaga podania parametru z nazwą pliku audio 
-
-### RF-003: Tworzenie Projektu Blender
-- System musi utworzyć nowy projekt Blender z czystą sceną
-- Musi skonfigurować VSE z odpowiednimi ścieżkami
-- Musi ustawić parametry renderingu zgodnie ze specyfikacją
-
-### RF-004: Organizacja Ścieżek VSE
-- Pliki wideo na osobnych kanałach (1, 2, 3...)
-- Główna ścieżka audio na kanale 1 (audio)
-- Wszystkie ścieżki synchronizowane od frame 1
-
-### RF-005: Konfiguracja Renderingu
-- Rozdzielczość: 1280x720 (HD)
-- Format: MP4 (H.264 + AAC)
-- Ścieżka wyjściowa: `{katalog}/blender/render/`
-- Nazwa pliku: `{nazwa_nagrania}_final.mp4`
-
-## 🚨 Wymagania Niefunkcjonalne
-
-
-### RNF-002: Kompatybilność
-- Blender 4.0+ (Python API)
-- FFmpeg 4.4+ (ekstrakcja audio)
-- Python 3.9+ (zgodność z istniejącym systemem)
-
-### RNF-003: Niezawodność
-- Walidacja wszystkich plików wejściowych
-- Obsługa błędów FFmpeg i Blender API
-- Rollback przy niepowodzeniu
-
-### RNF-004: Użyteczność
-- Jasne komunikaty o błędach
-- Progress bar dla długich operacji
-- Verbose mode dla debugowania
-
-## 🔍 Przypadki Użycia
-
-### UC-001: Podstawowe Tworzenie Projektu
-1. Użytkownik uruchamia `python -m cli.blend_setup ./recording_dir`
-2. System waliduje strukturę katalogu
-3. System tworzy projekt Blender VSE
-4. System konfiguruje ścieżki i parametry renderingu
-5. System zapisuje plik `.blend`
-
-### UC-002: Nadpisanie Istniejącego Projektu
-1. Użytkownik uruchamia z flagą `--force`
-2. System pyta o potwierdzenie nadpisania
-3. System usuwa stary plik `.blend`
-4. System tworzy nowy projekt
-
-### UC-003: Obsługa Błędów
-1. System wykrywa nieprawidłową strukturę
-2. System wyświetla szczegółowy komunikat błędu
-3. System kończy działanie z kodem błędu
-
-## 📋 Kryteria Akceptacji
-
-### AC-001: Struktura Wyjściowa
-- [x] Utworzony katalog `blender/`
-- [x] Plik `nazwa_nagrania.blend` istnieje
-- [x] Katalog `render/` istnieje
-
-### AC-002: Konfiguracja VSE
-- [x] Wszystkie pliki wideo na osobnych kanałach
-- [x] Główna ścieżka audio na kanale 1
-- [x] Wszystkie ścieżki zaczynają się od frame 1
-
-### AC-003: Parametry Renderingu
-- [x] Rozdzielczość: 1280x720
-- [x] Format: MP4
-- [x] Ścieżka wyjściowa: `{katalog}/blender/render/`
-- [x] Nazwa pliku: `{nazwa_nagrania}_final.mp4`
-
-### AC-004: Interface CLI
-- [x] Komenda `python -m cli.blend_setup` działa
-- [x] Argumenty są poprawnie parsowane
-- [x] Pomoc (`--help`) jest dostępna
-- [x] Verbose mode (`--verbose`) działa
-
-## 🧪 Strategia Testowa
-
-### Testy Jednostkowe
-- Walidacja struktury katalogów
-- Parsowanie argumentów CLI
-- Konfiguracja parametrów Blender
-
-### Testy Integracyjne
-- Ekstrakcja audio przez FFmpeg
-- Tworzenie projektu Blender
-- Zapis pliku `.blend`
-
-### Testy E2E
-- Pełny workflow od katalogu do projektu
-- Różne scenariusze plików wejściowych
-- Obsługa błędów i edge cases
-
-## 📚 Zależności
-
-### Nowe Zależności
-- `bpy` (Blender Python API) - do tworzenia projektów
-- Opcjonalnie: `bpy` jako moduł lub wywołanie zewnętrzne
-
-### Istniejące Zależności
-- `ffmpeg` - ekstrakcja audio
-- `pathlib` - operacje na plikach
-- `argparse` - parsowanie argumentów
-- `json` - czytanie metadanych
-
-## 🔄 Integracja z Istniejącym Systemem
-
-### Współdzielone Komponenty
-- `FileStructureManager` - zarządzanie strukturą plików
-- `metadata.py` - czytanie metadanych
-- `cli/` - struktura CLI
-
-### Nowe Komponenty
-- `cli/blend_setup.py` - główny interface CLI
-- `core/blender_project.py` - logika tworzenia projektów
+- Czas analizy: < 10s dla 5-minutowego audio
+- Generowanie keyframes: < 5s
+- Render preview: czasu rzeczywistego
+- Pamięć: < 500MB dla całego procesu
