@@ -311,11 +311,18 @@ class FileStructureManager:
             Path: Ścieżka do pliku analizy audio
         """
         video_path = Path(video_path)
-        recording_dir = video_path.parent
+
+        # Check if this is an extracted file path (contains "extracted" directory)
+        if "extracted" in video_path.parts:
+            # For extracted files, go up one level to get the recording directory
+            recording_dir = video_path.parent.parent
+        else:
+            # For main video files, parent is the recording directory
+            recording_dir = video_path.parent
 
         # Nazwa pliku analizy bazuje na nazwie pliku wideo
         base_name = video_path.stem
-        analysis_filename = f"{base_name}_audio_analysis.json"
+        analysis_filename = f"{base_name}_analysis.json"
 
         return recording_dir / FileStructureManager.ANALYSIS_DIRNAME / analysis_filename
 

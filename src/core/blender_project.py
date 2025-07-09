@@ -93,15 +93,14 @@ class BlenderProjectManager:
         # 6. Read FPS from metadata
         fps = self._read_fps_from_metadata(structure.metadata_file)
 
-        # 7. Load audio analysis if available and requested
-        analysis_data = None
+        # 7. Find audio analysis file path if available and requested
+        analysis_file_path = None
         if animation_mode != "none":
-            # Try to find main video file for analysis
-            main_video = structure.video_file
-            analysis_data = FileStructureManager.load_audio_analysis(main_video)
-            if analysis_data:
+            # Get path to analysis file instead of loading the data
+            analysis_file_path = FileStructureManager.get_analysis_file_path(main_audio)
+            if analysis_file_path.exists():
                 logger.info(
-                    f"Loaded audio analysis for animation mode: {animation_mode}"
+                    f"Found audio analysis file for animation mode: {animation_mode}"
                 )
             else:
                 logger.warning(
@@ -115,7 +114,7 @@ class BlenderProjectManager:
             output_blend,
             render_output,
             fps,
-            analysis_data,
+            analysis_file_path,
             animation_mode,
             beat_division,
         )
@@ -272,7 +271,7 @@ class BlenderProjectManager:
         output_blend: Path,
         render_output: Path,
         fps: int = 30,
-        analysis_data: Optional[dict] = None,
+        analysis_file_path: Optional[Path] = None,
         animation_mode: str = "none",
         beat_division: int = 8,
     ) -> dict:
@@ -285,7 +284,7 @@ class BlenderProjectManager:
             output_blend: Output .blend file path
             render_output: Render output path
             fps: Frames per second
-            analysis_data: Optional audio analysis data
+            analysis_file_path: Optional path to audio analysis file
             animation_mode: Animation mode for VSE
             beat_division: Beat division for animation timing
 
@@ -302,9 +301,9 @@ class BlenderProjectManager:
             {
                 "BLENDER_VSE_ANIMATION_MODE": animation_mode,
                 "BLENDER_VSE_BEAT_DIVISION": str(beat_division),
-                "BLENDER_VSE_AUDIO_ANALYSIS": self._serialize_analysis_data(
-                    analysis_data
-                ),
+                "BLENDER_VSE_AUDIO_ANALYSIS_FILE": str(analysis_file_path)
+                if analysis_file_path
+                else "",
             }
         )
 

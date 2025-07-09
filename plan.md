@@ -41,33 +41,42 @@
 - [x] Implementacja: cli/analyze_audio.py
 - [x] Test: integracja z istniejącym blend_setup
 
-## Faza 3: Animacje w Blenderze
+## Faza 3A: MVP - Beat Switch Animation (Highest Risk First)
 
-### 3.1 Testy dla rozszerzonego skryptu Blender
-- [ ] Mock Blender API (bpy) for testing
-- [ ] Test: load_animation_data() z env vars
-- [ ] Test: generowanie keyframes dla różnych właściwości
-- [ ] Test: calculate_pip_positions() - grid layout
-- [ ] Test: różne tryby animacji (beat-switch, energy-pulse)
+### 3A.1 Fundamenty MVP (TDD)
+- [ ] Mock Blender API (bpy) for testing - focus na VSE sequence_editor
+- [ ] Test: load_animation_data() tylko dla beat events
+- [ ] Test: calculate_pip_positions() - prosty hardcoded 2x2 grid
+- [ ] Test: animate_beat_switch() - przełączanie blend_alpha na beat timing
 
-### 3.2 Rozszerzenie blender_vse_script.py - Core Functions
-- [ ] Funkcja: load_animation_data() - odczyt JSON z BLENDER_VSE_AUDIO_ANALYSIS
-- [ ] Funkcja: create_pip_animations() - główny orchestrator animacji
-- [ ] Funkcja: calculate_pip_positions() - layout PiP w grid 2x2
-- [ ] Funkcja: create_keyframe_sequence() - helper do wstawiania keyframe'ów
-- [ ] Funkcja: setup_animation_timeline() - przygotowanie timeline dla animacji
+### 3A.2 Implementacja MVP
+- [ ] load_animation_data() - tylko beat events + basic validation
+- [ ] calculate_pip_positions() - hardcoded 2x2 grid layout (4 pozycje)
+- [ ] animate_beat_switch() - blend_alpha keyframes na beat events
+- [ ] Minimalna integracja z BlenderVSEConfigurator.setup_vse_project()
 
-### 3.3 Animation Mode Implementations
-- [ ] animate_beat_switch() - przełączanie blend_alpha na beat events
-- [ ] animate_energy_pulse() - skalowanie transform.scale_x/y na energy_peaks
+### 3A.3 Weryfikacja MVP
+- [ ] End-to-end test: utworzenie projektu z --animation-mode beat-switch
+- [ ] Manual verification w Blenderze: czy keyframes są widoczne w timeline
+- [ ] Basic demo: 2 video strips przełączające się w rytm beat events
+
+**🎯 MVP Success Criteria:**
+- Blender tworzy projekt z keyframes na timeline
+- Video strips mają animowane blend_alpha właściwości
+- Timing jest synchronizowany z beat events z analizy audio
+- Można otworzyć projekt w Blenderze i zobaczyć animacje
+
+## Faza 3B: Rozszerzenie (Po weryfikacji MVP)
+
+### 3B.1 Energy Pulse Animation
+- [ ] Test: animate_energy_pulse() - skalowanie transform.scale_x/y
+- [ ] Implementacja: energy_pulse mode z energy_peaks events
+- [ ] Integracja z istniejącym MVP system
+
+### 3B.2 Pozostałe tryby animacji
 - [ ] animate_section_transitions() - płynne przejścia na sections
 - [ ] animate_multi_pip() - wszystkie PiP widoczne z różnymi efektami
-
-### 3.4 Blender VSE API Integration
-- [ ] Keyframe helpers - wrappers dla strip.keyframe_insert()
-- [ ] PiP positioning - kontrola transform.offset_x/y
-- [ ] Timeline management - konwersja seconds → frames
-- [ ] Strip property animation - blend_alpha, scale, offset
+- [ ] Advanced keyframe helpers i easing functions
 
 ## Faza 4: Demonstracja i dokumentacja
 
@@ -88,10 +97,11 @@
 - Środa-Czwartek: Implementacja AudioAnalyzer
 - Piątek: Testy integracyjne
 
-### Tydzień 2 (Faza 2-3)
+### Tydzień 2 (Faza 2-3A)
 - Poniedziałek: Integracja z systemem ✅ COMPLETE
-- Wtorek-Środa: Rozszerzenie Blender script (Phase 3)
-- Czwartek: Testowanie end-to-end
+- Wtorek: Phase 3A MVP - Beat Switch Animation (TDD + Implementation)
+- Środa: Phase 3A MVP - Weryfikacja i manual testing w Blenderze
+- Czwartek: Phase 3B (jeśli MVP sukces) lub pivot (jeśli problemy)
 - Piątek: Bugfixing i optymalizacja
 
 ### Tydzień 3 (Faza 4)
@@ -105,10 +115,11 @@
    - Ryzyko: konflikt wersji z OBS Python
    - Mitygacja: opcjonalna analiza, fallback na prostsze metody
 
-2. **Blender API zmiany**
-   - Ryzyko: różne wersje Blendera, zmiany w VSE API
-   - Mitygacja: sprawdzanie wersji, kompatybilność wsteczna, fallback dla właściwości
+2. **Blender API zmiany** - 🎯 GŁÓWNE RYZYKO - MVP focus
+   - Ryzyko: różne wersje Blendera, zmiany w VSE API, strip.keyframe_insert() może nie działać
+   - Mitygacja: MVP approach - weryfikacja najpierw beat-switch, potem inne animacje
    - Aktualizacja: Znamy kluczowe API - bpy.context.scene.sequence_editor, strip.keyframe_insert()
+   - MVP Strategy: Szybka weryfikacja czy keyframes w ogóle działają
 
 3. **Performance**
    - Ryzyko: długa analiza dużych plików

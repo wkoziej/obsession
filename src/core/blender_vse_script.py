@@ -27,8 +27,9 @@ blender --background --python blender_vse_script.py
 import bpy
 import os
 import sys
+import json
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 
 class BlenderVSEConfigurator:
@@ -43,6 +44,10 @@ class BlenderVSEConfigurator:
         self.fps = int(os.getenv("BLENDER_VSE_FPS", "30"))
         self.resolution_x = int(os.getenv("BLENDER_VSE_RESOLUTION_X", "1280"))
         self.resolution_y = int(os.getenv("BLENDER_VSE_RESOLUTION_Y", "720"))
+
+        # Animation parameters
+        self.animation_mode = os.getenv("BLENDER_VSE_ANIMATION_MODE", "none")
+        self.beat_division = int(os.getenv("BLENDER_VSE_BEAT_DIVISION", "8"))
 
     def _parse_video_files(self) -> List[Path]:
         """Parsuj listę plików wideo z zmiennej środowiskowej."""
@@ -197,6 +202,25 @@ class BlenderVSEConfigurator:
                     print(f"✗ Błąd zapisywania projektu: {e}")
                     return False
 
+            # 9. Apply animations if requested
+            if self.animation_mode != "none":
+                success = self._apply_animations(sequencer)
+                if not success:
+                    print(
+                        "⚠ Animacje nie zostały zastosowane, ale projekt został utworzony"
+                    )
+                else:
+                    # 10. Save file again after adding animations
+                    if self.output_blend:
+                        try:
+                            bpy.ops.wm.save_as_mainfile(filepath=str(self.output_blend))
+                            print(
+                                f"✓ Zapisano projekt z animacjami: {self.output_blend}"
+                            )
+                        except Exception as e:
+                            print(f"✗ Błąd zapisywania projektu z animacjami: {e}")
+                            return False
+
             print("=== Konfiguracja projektu VSE zakończona sukcesem ===")
             return True
 
@@ -206,6 +230,201 @@ class BlenderVSEConfigurator:
 
             traceback.print_exc()
             return False
+
+    def _apply_animations(self, sequencer) -> bool:
+        """
+        Apply audio-driven animations to video strips.
+
+        Args:
+            sequencer: Blender sequence editor
+
+        Returns:
+            bool: True if animations were applied successfully
+        """
+        print(f"=== Applying {self.animation_mode} animations ===")
+
+        # Load animation data
+        animation_data = self._load_animation_data()
+        if not animation_data:
+            print("✗ No animation data available")
+            return False
+
+        # Get video strips (exclude audio strips)
+        video_strips = [
+            seq for seq in sequencer.sequences if hasattr(seq, "blend_alpha")
+        ]
+        if not video_strips:
+            print("✗ No video strips found for animation")
+            return False
+
+        print(f"✓ Found {len(video_strips)} video strips for animation")
+
+        # Apply animation based on mode
+        if self.animation_mode == "beat-switch":
+            success = self._animate_beat_switch(video_strips, animation_data)
+            if success:
+                print("✓ Beat switch animation applied successfully")
+            else:
+                print("✗ Beat switch animation failed")
+            return success
+        else:
+            print(f"✗ Animation mode '{self.animation_mode}' not implemented yet")
+            return False
+
+    def _load_animation_data(self) -> Optional[Dict]:
+        """
+        Load animation data from BLENDER_VSE_AUDIO_ANALYSIS environment variable.
+
+        MVP version: Only loads beat events, ignores other animation data.
+
+        Returns:
+            Optional[Dict]: Animation data with beat events or None if not available
+        """
+        # Try loading from file first (new approach)
+        analysis_file = os.getenv("BLENDER_VSE_AUDIO_ANALYSIS_FILE", "")
+
+        if analysis_file and Path(analysis_file).exists():
+            try:
+                with open(analysis_file, "r") as f:
+                    full_data = json.load(f)
+            except Exception as e:
+                print(f"Error loading analysis file {analysis_file}: {e}")
+                return None
+        else:
+            # Fallback to environment variable (old approach)
+            analysis_json = os.getenv("BLENDER_VSE_AUDIO_ANALYSIS", "")
+
+            if not analysis_json:
+                print("No audio analysis data found in file or environment variable")
+                return None
+
+            try:
+                full_data = json.loads(analysis_json)
+            except json.JSONDecodeError as e:
+                print(f"Error parsing animation data JSON: {e}")
+                return None
+
+        # Common processing for both file and env var approaches
+        try:
+            # MVP: Extract only beat events and basic metadata
+            if "animation_events" not in full_data:
+                print("No animation_events found in analysis data")
+                return None
+
+            if "beats" not in full_data["animation_events"]:
+                print("No beats found in animation events")
+                return None
+
+            # MVP: Return only beat events data
+            mvp_data = {
+                "duration": full_data.get("duration", 0.0),
+                "tempo": full_data.get("tempo", {"bpm": 120.0}),
+                "animation_events": {"beats": full_data["animation_events"]["beats"]},
+            }
+
+            print(f"✓ Loaded {len(mvp_data['animation_events']['beats'])} beat events")
+            return mvp_data
+
+        except Exception as e:
+            print(f"Error processing animation data: {e}")
+            return None
+
+    def _calculate_pip_positions(
+        self, resolution_x: int = 1280, resolution_y: int = 720
+    ) -> List[Dict]:
+        """
+        Calculate PiP positions for 2x2 grid layout.
+
+        MVP version: Hardcoded 2x2 grid for maximum 4 video sources.
+
+        Args:
+            resolution_x: Canvas width in pixels
+            resolution_y: Canvas height in pixels
+
+        Returns:
+            List[Dict]: List of position dictionaries with x, y, width, height
+        """
+        # MVP: Hardcoded 2x2 grid
+        pip_width = resolution_x // 2
+        pip_height = resolution_y // 2
+
+        positions = [
+            # Top-left
+            {"x": 0, "y": pip_height, "width": pip_width, "height": pip_height},
+            # Top-right
+            {"x": pip_width, "y": pip_height, "width": pip_width, "height": pip_height},
+            # Bottom-left
+            {"x": 0, "y": 0, "width": pip_width, "height": pip_height},
+            # Bottom-right
+            {"x": pip_width, "y": 0, "width": pip_width, "height": pip_height},
+        ]
+
+        print(
+            f"✓ Calculated 2x2 PiP positions for {resolution_x}x{resolution_y} canvas"
+        )
+        return positions
+
+    def _animate_beat_switch(self, video_strips: List, animation_data: Dict) -> bool:
+        """
+        Animate beat switch by alternating strip visibility using blend_alpha.
+
+        MVP version: Simple alternating visibility on beat events.
+
+        Args:
+            video_strips: List of video strips from Blender VSE
+            animation_data: Animation data containing beat events
+
+        Returns:
+            bool: True if animation was applied successfully
+        """
+        if not animation_data or "animation_events" not in animation_data:
+            print("No animation data available")
+            return True
+
+        beats = animation_data["animation_events"].get("beats", [])
+        if not beats:
+            print("No beat events found - skipping animation")
+            return True
+
+        if not video_strips:
+            print("No video strips found - skipping animation")
+            return True
+
+        # Get FPS from scene
+        fps = bpy.context.scene.render.fps
+        print(
+            f"✓ Animating {len(video_strips)} strips on {len(beats)} beats at {fps} FPS"
+        )
+
+        # Set initial visibility - first strip visible, others hidden
+        for i, strip in enumerate(video_strips):
+            strip.blend_alpha = 1.0 if i == 0 else 0.0
+            # Insert keyframe at frame 1 using scene keyframe_insert
+            data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
+            bpy.context.scene.keyframe_insert(data_path=data_path, frame=1)
+
+        # Animate on beat events
+        for beat_index, beat_time in enumerate(beats):
+            frame = int(beat_time * fps)
+            active_strip_index = beat_index % len(video_strips)
+
+            print(
+                f"  Beat {beat_index + 1}: frame {frame}, active strip {active_strip_index}"
+            )
+
+            # Set visibility for all strips
+            for strip_index, strip in enumerate(video_strips):
+                if strip_index == active_strip_index:
+                    strip.blend_alpha = 1.0  # Visible
+                else:
+                    strip.blend_alpha = 0.0  # Hidden
+
+                # Insert keyframe using scene keyframe_insert
+                data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
+                bpy.context.scene.keyframe_insert(data_path=data_path, frame=frame)
+
+        print("✓ Beat switch animation applied successfully")
+        return True
 
 
 def main() -> int:
