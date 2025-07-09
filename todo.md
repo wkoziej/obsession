@@ -1,6 +1,6 @@
 # Audio Animation PoC - TODO Tracker
 
-## Status: 🎉 Phase 3A MVP: Beat Switch Animation - END-TO-END SUCCESS! 🎬
+## Status: 🚀 Phase 3B: Energy Pulse Animation - STARTING IMPLEMENTATION 🎵
 
 Last updated: 2025-07-09
 
@@ -107,8 +107,10 @@ Last updated: 2025-07-09
 
 ### 3A.3 Weryfikacja MVP - Manual testing critical ✅ END-TO-END SUCCESS
 - [x] End-to-end test: utworzenie projektu z --animation-mode beat-switch
-- [ ] Manual verification w Blenderze: czy keyframes są widoczne w timeline
-- [ ] Basic demo: 2 video strips przełączające się w rytm beat events
+- [x] Manual verification w Blenderze: czy keyframes są widoczne w timeline
+- [x] Basic demo: 2 video strips przełączające się w rytm beat events
+- [x] Problem z FPS parsing rozwiązany (int(float()) fix)
+- [x] Dokumentacja beat-switch animation w CLAUDE.md
 
 **🎯 MVP Success Criteria:**
 - Blender tworzy projekt z keyframes na timeline ✅
@@ -120,15 +122,18 @@ Last updated: 2025-07-09
 
 ## Phase 3B: Rozszerzenie (Po weryfikacji MVP)
 
-### 3B.1 Energy Pulse Animation
-- [ ] Test: animate_energy_pulse() - skalowanie transform.scale_x/y
-- [ ] Implementacja: energy_pulse mode z energy_peaks events
-- [ ] Integracja z istniejącym MVP system
+### 3B.1 Energy Pulse Animation - CURRENT FOCUS 🎯
+- [ ] Test: animate_energy_pulse() - skalowanie transform.scale_x/y na energy_peaks
+- [ ] Implementacja: energy_pulse mode z energy_peaks events z analizy audio
+- [ ] Integracja z istniejącym MVP system (extend BlenderVSEConfigurator)
+- [ ] End-to-end test: --animation-mode energy-pulse
+- [ ] Manual verification: czy scale animation jest widoczny w Blenderze
 
-### 3B.2 Pozostałe tryby animacji
+### 3B.2 Pozostałe tryby animacji - FUTURE
 - [ ] animate_section_transitions() - płynne przejścia na sections
 - [ ] animate_multi_pip() - wszystkie PiP widoczne z różnymi efektami
 - [ ] Advanced keyframe helpers i easing functions
+- [ ] Kombinacja animacji (beat-switch + energy-pulse)
 
 ---
 

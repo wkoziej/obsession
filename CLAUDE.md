@@ -182,3 +182,68 @@ recording_name/
 - Support for OBS Advanced Scene Switcher plugin
 - Automatic source extraction based on scene switching metadata
 - Enhanced metadata collection for complex setups
+
+### Audio-Driven Animation System (Phase 3A MVP)
+
+The system supports audio-driven animations in Blender VSE projects using beat detection and keyframe animation.
+
+#### Beat-Switch Animation
+
+**How it works:**
+- Analyzes main audio file to detect beat events using librosa
+- Creates keyframes in Blender VSE timeline synchronized to beat timings
+- Alternates video strip visibility on each detected beat
+- Uses scene-level keyframes (`bpy.context.scene.keyframe_insert()`) for persistence
+
+**Usage:**
+```bash
+# Create VSE project with beat-switch animation
+uv run python -m src.cli.blend_setup ./recording_dir --animation-mode beat-switch
+
+# With specific main audio and beat division
+uv run python -m src.cli.blend_setup ./recording_dir \
+    --main-audio "main.m4a" \
+    --animation-mode beat-switch \
+    --beat-division 8
+```
+
+**Animation behavior:**
+- **Strip 1 visible**: From start until first beat
+- **Strip 2 visible**: From first beat until second beat  
+- **Strip 3 visible**: From second beat until third beat
+- **Cycling**: After last strip, returns to Strip 1 (round-robin)
+
+**Technical details:**
+- Beat times converted to frame numbers using project FPS
+- Each video strip gets `blend_alpha` keyframes (1.0 = visible, 0.0 = hidden)
+- Audio analysis stored in `analysis/[audio_file]_analysis.json`
+- Supports up to 2x2 grid layout (4 video sources maximum in MVP)
+
+**Requirements:**
+- Main audio file must exist in extracted/ directory
+- Audio analysis must be generated (automatic with `--animation-mode`)
+- Project must contain video files for animation
+
+**Beat division options:**
+- `1`: Every beat (quarter notes)
+- `2`: Every half beat (eighth notes)  
+- `4`: Every quarter beat (sixteenth notes)
+- `8`: Every eighth beat (thirty-second notes) - default
+- `16`: Every sixteenth beat (sixty-fourth notes)
+
+**File structure after animation:**
+```
+recording_name/
+├── recording_name.mkv
+├── metadata.json
+├── extracted/
+│   ├── video1.mp4
+│   ├── video2.mp4
+│   └── main_audio.m4a
+├── analysis/
+│   └── main_audio_analysis.json
+└── blender/
+    ├── recording_name.blend      # With keyframes
+    └── render/
+        └── recording_name_final.mp4
+```
