@@ -40,7 +40,7 @@ class BlenderVSEConfigurator:
         self.main_audio = self._get_env_path("BLENDER_VSE_MAIN_AUDIO")
         self.output_blend = self._get_env_path("BLENDER_VSE_OUTPUT_BLEND")
         self.render_output = self._get_env_path("BLENDER_VSE_RENDER_OUTPUT")
-        self.fps = int(os.getenv("BLENDER_VSE_FPS", "30"))
+        self.fps = int(float(os.getenv("BLENDER_VSE_FPS", "30")))
         self.resolution_x = int(os.getenv("BLENDER_VSE_RESOLUTION_X", "1280"))
         self.resolution_y = int(os.getenv("BLENDER_VSE_RESOLUTION_Y", "720"))
 
@@ -191,10 +191,33 @@ class BlenderVSEConfigurator:
                 try:
                     # Upewnij się, że katalog istnieje
                     self.output_blend.parent.mkdir(parents=True, exist_ok=True)
-                    bpy.ops.wm.save_as_mainfile(filepath=str(self.output_blend))
-                    print(f"✓ Zapisano projekt: {self.output_blend}")
+                    print(f"DEBUG: Attempting to save to: {self.output_blend}")
+                    print(
+                        f"DEBUG: Directory exists: {self.output_blend.parent.exists()}"
+                    )
+
+                    result = bpy.ops.wm.save_as_mainfile(
+                        filepath=str(self.output_blend)
+                    )
+                    print(f"DEBUG: Save operation result: {result}")
+
+                    # Check if file was actually created
+                    if self.output_blend.exists():
+                        print(f"✓ Zapisano projekt: {self.output_blend}")
+                        print(
+                            f"DEBUG: File size: {self.output_blend.stat().st_size} bytes"
+                        )
+                    else:
+                        print(
+                            f"✗ Plik nie został utworzony mimo braku błędów: {self.output_blend}"
+                        )
+                        return False
+
                 except Exception as e:
                     print(f"✗ Błąd zapisywania projektu: {e}")
+                    import traceback
+
+                    traceback.print_exc()
                     return False
 
             print("=== Konfiguracja projektu VSE zakończona sukcesem ===")
