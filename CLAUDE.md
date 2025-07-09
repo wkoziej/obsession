@@ -247,3 +247,66 @@ recording_name/
     └── render/
         └── recording_name_final.mp4
 ```
+
+#### Energy-Pulse Animation (Phase 3B.1)
+
+**How it works:**
+- Analyzes main audio file to detect energy peaks using RMS analysis
+- Creates transform.scale keyframes synchronized to energy peak timings
+- Scales all video strips simultaneously by 20% on energy peaks
+- Uses scene-level keyframes for persistence in Blender VSE
+
+**Usage:**
+```bash
+# Create VSE project with energy-pulse animation
+uv run python -m src.cli.blend_setup ./recording_dir --animation-mode energy-pulse
+
+# With specific parameters
+uv run python -m src.cli.blend_setup ./recording_dir \
+    --main-audio "main.m4a" \
+    --animation-mode energy-pulse \
+    --beat-division 8
+```
+
+**Animation behavior:**
+- **All strips pulse together**: Synchronized scaling on energy peaks
+- **Scale pattern**: Normal (1.0) → Peak (1.2) → Normal (1.0)
+- **Duration**: 1 frame scale-up, 1 frame scale-down
+- **Timing**: Energy peaks converted to frame numbers using project FPS
+
+**Technical details:**
+- Energy peak times converted to frame numbers using project FPS
+- Each video strip gets `transform.scale_x/y` keyframes
+- Audio analysis uses `librosa.feature.rms()` + peak detection
+- Scene-level keyframes: `sequence_editor.sequences_all[strip_name].transform.scale_x/y`
+
+#### Audio Analysis Data Format
+
+Both animations use data from `analysis/[audio_file]_analysis.json`:
+
+```json
+{
+  "duration": 180.36,
+  "tempo": {"bpm": 120.0, "confidence": 0.85},
+  "animation_events": {
+    "beats": [0.5, 1.0, 1.5, 2.0, 2.5, 3.0],
+    "energy_peaks": [2.1, 5.8, 12.3, 18.7, 24.2],
+    "sections": [
+      {"start": 0.0, "end": 32.1, "label": "intro"},
+      {"start": 32.1, "end": 96.4, "label": "verse"}
+    ],
+    "onsets": [0.12, 0.54, 1.02, 1.48, 2.01]
+  },
+  "frequency_bands": {
+    "bass": [0.8, 1.2, 0.6, 1.5, 0.9],
+    "mid": [0.5, 0.7, 0.9, 0.6, 0.8],
+    "treble": [0.3, 0.6, 0.4, 0.7, 0.5]
+  }
+}
+```
+
+**Data sources:**
+- **Beat-switch**: Uses `animation_events.beats` timestamps
+- **Energy-pulse**: Uses `animation_events.energy_peaks` timestamps
+- **Section-transition** (future): Uses `animation_events.sections` boundaries
+- **Multi-PiP** (future): Uses `animation_events.onsets` + `frequency_bands`

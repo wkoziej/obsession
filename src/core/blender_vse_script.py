@@ -267,6 +267,13 @@ class BlenderVSEConfigurator:
             else:
                 print("✗ Beat switch animation failed")
             return success
+        elif self.animation_mode == "energy-pulse":
+            success = self._animate_energy_pulse(video_strips, animation_data)
+            if success:
+                print("✓ Energy pulse animation applied successfully")
+            else:
+                print("✗ Energy pulse animation failed")
+            return success
         else:
             print(f"✗ Animation mode '{self.animation_mode}' not implemented yet")
             return False
@@ -306,24 +313,35 @@ class BlenderVSEConfigurator:
 
         # Common processing for both file and env var approaches
         try:
-            # MVP: Extract only beat events and basic metadata
+            # Phase 3B: Extract beat events and energy peaks
             if "animation_events" not in full_data:
                 print("No animation_events found in analysis data")
                 return None
 
-            if "beats" not in full_data["animation_events"]:
-                print("No beats found in animation events")
+            animation_events = full_data["animation_events"]
+
+            # Phase 3B: Support both beats and energy_peaks
+            events_data = {}
+            if "beats" in animation_events:
+                events_data["beats"] = animation_events["beats"]
+                print(f"✓ Loaded {len(events_data['beats'])} beat events")
+
+            if "energy_peaks" in animation_events:
+                events_data["energy_peaks"] = animation_events["energy_peaks"]
+                print(f"✓ Loaded {len(events_data['energy_peaks'])} energy peak events")
+
+            if not events_data:
+                print("No supported animation events found (beats or energy_peaks)")
                 return None
 
-            # MVP: Return only beat events data
-            mvp_data = {
+            # Phase 3B: Return expanded data
+            expanded_data = {
                 "duration": full_data.get("duration", 0.0),
                 "tempo": full_data.get("tempo", {"bpm": 120.0}),
-                "animation_events": {"beats": full_data["animation_events"]["beats"]},
+                "animation_events": events_data,
             }
 
-            print(f"✓ Loaded {len(mvp_data['animation_events']['beats'])} beat events")
-            return mvp_data
+            return expanded_data
 
         except Exception as e:
             print(f"Error processing animation data: {e}")
@@ -424,6 +442,93 @@ class BlenderVSEConfigurator:
                 bpy.context.scene.keyframe_insert(data_path=data_path, frame=frame)
 
         print("✓ Beat switch animation applied successfully")
+        return True
+
+    def _animate_energy_pulse(self, video_strips: List, animation_data: Dict) -> bool:
+        """
+        Animate energy pulse by scaling strips on energy peaks.
+
+        Args:
+            video_strips: List of video strips from Blender VSE
+            animation_data: Animation data containing energy_peaks events
+
+        Returns:
+            bool: True if animation was applied successfully
+        """
+        if not animation_data or "animation_events" not in animation_data:
+            print("No animation data available")
+            return True
+
+        energy_peaks = animation_data["animation_events"].get("energy_peaks", [])
+        if not energy_peaks:
+            print("No energy peaks found - skipping animation")
+            return True
+
+        if not video_strips:
+            print("No video strips found - skipping animation")
+            return True
+
+        # Get FPS from scene
+        fps = bpy.context.scene.render.fps
+        print(
+            f"✓ Animating {len(video_strips)} strips on {len(energy_peaks)} energy peaks at {fps} FPS"
+        )
+
+        # Set initial scale to normal
+        for strip in video_strips:
+            if hasattr(strip, "transform"):
+                strip.transform.scale_x = 1.0
+                strip.transform.scale_y = 1.0
+                # Insert keyframe at frame 1 using scene keyframe_insert
+                data_path_x = (
+                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                )
+                data_path_y = (
+                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
+                )
+                bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=1)
+                bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=1)
+
+        # Animate on energy peak events
+        for peak_index, peak_time in enumerate(energy_peaks):
+            frame = int(peak_time * fps)
+
+            print(f"  Energy peak {peak_index + 1}: frame {frame}")
+
+            # Scale up on energy peak
+            for strip in video_strips:
+                if hasattr(strip, "transform"):
+                    strip.transform.scale_x = 1.2  # Scale up by 20%
+                    strip.transform.scale_y = 1.2
+
+                    # Insert keyframe at peak frame using scene keyframe_insert
+                    data_path_x = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                    data_path_y = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
+                    bpy.context.scene.keyframe_insert(
+                        data_path=data_path_x, frame=frame
+                    )
+                    bpy.context.scene.keyframe_insert(
+                        data_path=data_path_y, frame=frame
+                    )
+
+            # Scale back down after peak (1 frame later)
+            return_frame = frame + 1
+            for strip in video_strips:
+                if hasattr(strip, "transform"):
+                    strip.transform.scale_x = 1.0  # Back to normal
+                    strip.transform.scale_y = 1.0
+
+                    # Insert keyframe at return frame
+                    data_path_x = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                    data_path_y = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
+                    bpy.context.scene.keyframe_insert(
+                        data_path=data_path_x, frame=return_frame
+                    )
+                    bpy.context.scene.keyframe_insert(
+                        data_path=data_path_y, frame=return_frame
+                    )
+
+        print("✓ Energy pulse animation applied successfully")
         return True
 
 

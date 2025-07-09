@@ -1,6 +1,6 @@
 # Audio Animation PoC - TODO Tracker
 
-## Status: 🚀 Phase 3B: Energy Pulse Animation - STARTING IMPLEMENTATION 🎵
+## Status: 🎉 Phase 3B.1: Energy Pulse Animation - COMPLETE SUCCESS! 🎆
 
 Last updated: 2025-07-09
 
@@ -12,7 +12,8 @@ Last updated: 2025-07-09
 - [x] **Phase 1: Audio Analysis (TDD)** ✅
 - [x] **Phase 2: System Integration** ✅ COMPLETE 
 - [x] **Phase 3A: MVP Beat Switch Animation** ✅ END-TO-END SUCCESS
-- [ ] Phase 3B: Rozszerzenie (po weryfikacji MVP)
+- [x] **Phase 3B.1: Energy Pulse Animation** ✅ COMPLETE SUCCESS
+- [ ] Phase 3B.2: Pozostałe tryby animacji (section-transition, multi-pip)
 - [ ] Phase 4: Demo & Documentation
 
 ---
@@ -122,12 +123,15 @@ Last updated: 2025-07-09
 
 ## Phase 3B: Rozszerzenie (Po weryfikacji MVP)
 
-### 3B.1 Energy Pulse Animation - CURRENT FOCUS 🎯
-- [ ] Test: animate_energy_pulse() - skalowanie transform.scale_x/y na energy_peaks
-- [ ] Implementacja: energy_pulse mode z energy_peaks events z analizy audio
-- [ ] Integracja z istniejącym MVP system (extend BlenderVSEConfigurator)
-- [ ] End-to-end test: --animation-mode energy-pulse
-- [ ] Manual verification: czy scale animation jest widoczny w Blenderze
+### 3B.1 Energy Pulse Animation - COMPLETE SUCCESS ✅
+- [x] Test: animate_energy_pulse() - skalowanie transform.scale_x/y na energy_peaks
+- [x] Implementacja: energy_pulse mode z energy_peaks events z analizy audio
+- [x] Integracja z istniejącym MVP system (extend BlenderVSEConfigurator)
+- [x] End-to-end test: --animation-mode energy-pulse
+- [x] Manual verification: czy scale animation jest widoczny w Blenderze
+- [x] 5 new tests passing for energy-pulse animation
+- [x] Expanded _load_animation_data() to support beats + energy_peaks
+- [x] Larger blend files (481440 bytes vs 380480 bytes) confirming scale keyframes
 
 ### 3B.2 Pozostałe tryby animacji - FUTURE
 - [ ] animate_section_transitions() - płynne przejścia na sections
@@ -188,6 +192,15 @@ Last updated: 2025-07-09
   - Successfully created Blender VSE project with beat-switch animation mode
   - Total tests: 250+ passing (21 + 34 + 16 + integration tests)
 
+- ✅ PHASE 3B.1: ENERGY PULSE ANIMATION - COMPLETE SUCCESS:
+  - 5 new tests passing for energy-pulse animation (TDD approach)
+  - _animate_energy_pulse() implemented with transform.scale_x/y keyframes
+  - Integration with BlenderVSEConfigurator - energy-pulse mode working
+  - End-to-end CLI success: --animation-mode energy-pulse creates .blend files
+  - Expanded _load_animation_data() to support both beats and energy_peaks
+  - Larger blend files (481440 vs 380480 bytes) confirming scale animation keyframes
+  - Total tests: 255+ passing (21 + 34 + 16 + 5 + integration tests)
+
 ### Design Decisions
 - Using lazy loading for optional dependencies
 - JSON format for data exchange with Blender
@@ -234,11 +247,102 @@ uv run pytest tests/test_audio_analyzer.py --cov=src.core.audio_analyzer
 # Test audio analysis CLI
 uv run python -m cli.analyze_audio audio_file.wav ./output --beat-division 4
 
-# Test specific animation mode (WORKING!)
+# Test specific animation modes (WORKING!)
 uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode beat-switch --beat-division 8 --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a" --verbose
+
+uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode energy-pulse --beat-division 8 --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a" --verbose
 
 # Quick demo
 uv run python demo_audio_animation.py
+```
+
+## Animation Data Sources 🎵
+
+### Audio Analysis Output Format
+
+Animacje bazują na danych z `AudioAnalyzer.analyze_for_animation()` zapisanych w `analysis/[audio_file]_analysis.json`:
+
+```json
+{
+  "duration": 180.36,
+  "tempo": {
+    "bpm": 120.0,
+    "confidence": 0.85
+  },
+  "animation_events": {
+    "beats": [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, ...],
+    "energy_peaks": [2.1, 5.8, 12.3, 18.7, 24.2, ...],
+    "sections": [
+      {"start": 0.0, "end": 32.1, "label": "intro"},
+      {"start": 32.1, "end": 96.4, "label": "verse"},
+      {"start": 96.4, "end": 128.5, "label": "chorus"}
+    ],
+    "onsets": [0.12, 0.54, 1.02, 1.48, 2.01, ...]
+  },
+  "frequency_bands": {
+    "bass": [0.8, 1.2, 0.6, 1.5, 0.9, ...],
+    "mid": [0.5, 0.7, 0.9, 0.6, 0.8, ...],
+    "treble": [0.3, 0.6, 0.4, 0.7, 0.5, ...]
+  }
+}
+```
+
+### Animation Modes & Data Usage
+
+**1. Beat-Switch Animation** (`--animation-mode beat-switch`)
+- **Data source**: `animation_events.beats` (array of timestamps in seconds)
+- **How it works**: Przełącza widoczność video strips (blend_alpha) na każdy beat
+- **Keyframes**: `sequence_editor.sequences_all[strip_name].blend_alpha`
+- **Pattern**: Strip 1→2→3→4→1→2→3→4 (round-robin)
+- **Timing**: Beat times * FPS = frame numbers for keyframes
+
+**2. Energy Pulse Animation** (`--animation-mode energy-pulse`)
+- **Data source**: `animation_events.energy_peaks` (array of timestamps in seconds)
+- **How it works**: Skaluje wszystkie video strips o 20% na energy peaks
+- **Keyframes**: `sequence_editor.sequences_all[strip_name].transform.scale_x/y`
+- **Pattern**: Normal scale (1.0) → Peak scale (1.2) → Normal scale (1.0)
+- **Timing**: Energy peak times * FPS = frame numbers, +1 frame for return
+
+**3. Section Transitions** (future - `--animation-mode section-transition`)
+- **Data source**: `animation_events.sections` (array of objects with start/end/label)
+- **How it works**: Smooth transitions between strips on section boundaries
+- **Keyframes**: Multiple properties (blend_alpha, transform, effects)
+
+**4. Multi-PiP** (future - `--animation-mode multi-pip`)
+- **Data source**: `animation_events.onsets` + `frequency_bands`
+- **How it works**: All strips visible simultaneously with different effects
+- **Keyframes**: Position, scale, rotation based on frequency analysis
+
+### Beat Division Impact
+
+Parameter `--beat-division` wpływa na `animation_events.beats`:
+- `1`: Every beat (quarter notes) - fewer animation events
+- `2`: Every half beat (eighth notes) 
+- `4`: Every quarter beat (sixteenth notes)
+- `8`: Every eighth beat (thirty-second notes) - default, more animation events
+- `16`: Every sixteenth beat (sixty-fourth notes) - most animation events
+
+### Data Generation Process
+
+1. **Audio Analysis**: `AudioAnalyzer.analyze_for_animation(audio_file)`
+2. **Beat Detection**: `librosa.beat.beat_track()` → timestamps
+3. **Energy Detection**: `librosa.feature.rms()` + peak finding → timestamps  
+4. **Section Detection**: `librosa.segment.agglomerative()` → boundaries
+5. **Onset Detection**: `librosa.onset.onset_detect()` → timestamps
+6. **Frequency Analysis**: `librosa.feature.spectral_centroid()` → continuous data
+7. **File Save**: JSON format w `analysis/[audio_file]_analysis.json`
+
+### Debug Animation Data
+
+```bash
+# View raw analysis data
+cat "/home/wojtas/Wideo/obs/2025-07-08 19-38-18/analysis/Przechwytywanie wejścia dźwięku (PulseAudio)_analysis.json" | jq '.animation_events.beats | length'
+
+# Count energy peaks
+cat "/home/wojtas/Wideo/obs/2025-07-08 19-38-18/analysis/Przechwytywanie wejścia dźwięku (PulseAudio)_analysis.json" | jq '.animation_events.energy_peaks | length'
+
+# Check tempo
+cat "/home/wojtas/Wideo/obs/2025-07-08 19-38-18/analysis/Przechwytywanie wejścia dźwięku (PulseAudio)_analysis.json" | jq '.tempo.bpm'
 ```
 
 ## Manual Verification Guide

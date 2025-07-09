@@ -36,6 +36,9 @@ class MockBPY:
         self.context.scene.frame_start = 1
         self.context.scene.frame_end = 100
 
+        # Mock keyframe_insert for scene-level keyframes
+        self.context.scene.keyframe_insert = Mock()
+
 
 # Create a global mock bpy instance
 _mock_bpy = MockBPY()
@@ -398,3 +401,130 @@ class TestBlenderVSEConfiguratorIntegration:
             result = configurator._apply_animations(mock_sequencer)
 
             assert result is False
+
+
+class TestAnimateEnergyPulse:
+    """Tests for animate_energy_pulse function - Phase 3B.1."""
+
+    def test_animate_energy_pulse_basic(self, mock_bpy):
+        """Test basic energy pulse animation with transform.scale keyframes."""
+        # Create mock video strip with transform property
+        strip = Mock()
+        strip.name = "Video_1"
+        strip.transform = Mock()
+        strip.transform.scale_x = 1.0
+        strip.transform.scale_y = 1.0
+        strip.keyframe_insert = Mock()
+
+        energy_events = {
+            "animation_events": {
+                "energy_peaks": [1.0, 2.0, 3.0]  # Energy peak times in seconds
+            }
+        }
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_energy_pulse([strip], energy_events)
+
+            assert result is True
+
+    def test_animate_energy_pulse_scale_keyframes(self, mock_bpy):
+        """Test that energy pulse creates scale keyframes at energy peaks."""
+        strip = Mock()
+        strip.name = "Video_1"
+        strip.transform = Mock()
+        strip.transform.scale_x = 1.0
+        strip.transform.scale_y = 1.0
+
+        energy_events = {
+            "animation_events": {
+                "energy_peaks": [1.0, 2.0]  # Two energy peaks
+            }
+        }
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_energy_pulse([strip], energy_events)
+
+            assert result is True
+            # Should have scene-level keyframes for: initial (2) + 2 energy peaks * (scale up + scale down) * 2 axes
+            # = 2 + 2 * 2 * 2 = 10 keyframes minimum
+            assert mock_bpy.context.scene.keyframe_insert.call_count >= 10
+
+    def test_animate_energy_pulse_no_energy_peaks(self, mock_bpy):
+        """Test energy pulse animation with no energy peaks."""
+        strip = Mock()
+        strip.keyframe_insert = Mock()
+
+        empty_events = {"animation_events": {"energy_peaks": []}}
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_energy_pulse([strip], empty_events)
+
+            assert result is True
+            # No energy peaks = no keyframes
+            assert strip.keyframe_insert.call_count == 0
+
+    def test_animate_energy_pulse_multiple_strips(self, mock_bpy):
+        """Test energy pulse animation with multiple video strips."""
+        strip1 = Mock()
+        strip1.name = "Video_1"
+        strip1.transform = Mock()
+        strip1.transform.scale_x = 1.0
+        strip1.transform.scale_y = 1.0
+
+        strip2 = Mock()
+        strip2.name = "Video_2"
+        strip2.transform = Mock()
+        strip2.transform.scale_x = 1.0
+        strip2.transform.scale_y = 1.0
+
+        energy_events = {"animation_events": {"energy_peaks": [1.0, 2.0, 3.0]}}
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_energy_pulse([strip1, strip2], energy_events)
+
+            assert result is True
+            # 2 strips * (2 initial + 3 energy peaks * 2 keyframes * 2 axes) = 2 * (2 + 12) = 28 keyframes
+            assert mock_bpy.context.scene.keyframe_insert.call_count >= 28
+
+    def test_animate_energy_pulse_fps_conversion(self, mock_bpy):
+        """Test that energy peak times are correctly converted to frames."""
+        strip = Mock()
+        strip.name = "Video_1"
+        strip.transform = Mock()
+        strip.transform.scale_x = 1.0
+        strip.transform.scale_y = 1.0
+
+        energy_events = {
+            "animation_events": {
+                "energy_peaks": [0.5, 1.0, 1.5]  # Times in seconds
+            }
+        }
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_energy_pulse([strip], energy_events)
+
+            assert result is True
+            # Should have scene-level keyframes for energy peaks converted to frames (30 FPS)
+            # 0.5s = frame 15, 1.0s = frame 30, 1.5s = frame 45
+            # 2 initial + 3 peaks * 2 keyframes * 2 axes = 2 + 12 = 14 keyframes
+            assert mock_bpy.context.scene.keyframe_insert.call_count >= 14
