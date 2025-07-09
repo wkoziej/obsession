@@ -41,7 +41,7 @@ class BlenderVSEConfigurator:
         self.main_audio = self._get_env_path("BLENDER_VSE_MAIN_AUDIO")
         self.output_blend = self._get_env_path("BLENDER_VSE_OUTPUT_BLEND")
         self.render_output = self._get_env_path("BLENDER_VSE_RENDER_OUTPUT")
-        self.fps = int(os.getenv("BLENDER_VSE_FPS", "30"))
+        self.fps = int(float(os.getenv("BLENDER_VSE_FPS", "30")))
         self.resolution_x = int(os.getenv("BLENDER_VSE_RESOLUTION_X", "1280"))
         self.resolution_y = int(os.getenv("BLENDER_VSE_RESOLUTION_Y", "720"))
 
