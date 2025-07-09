@@ -1,122 +1,225 @@
-# Specyfikacja: Centralizacja logiki struktury katalogów
+# Specyfikacja: Generator Projektów Blender VSE
 
-## Cel
-Centralizacja rozproszonej logiki struktury katalogów w jednym module, eliminując duplikację kodu i ułatwiając zarządzanie różnymi strukturami plików nagrań.
+## 📋 Przegląd
 
-## Problem
-Obecnie logika struktury katalogów jest rozproszona w wielu miejscach:
-- `obs_script.py` - tworzy strukturę `nagranie_YYYY-MM-DD_HH-MM-SS/`
-- `extract.py` - rozpoznaje strukturę przez obecność `metadata.json`
-- `advanced_scene_switcher_extractor.py` - szuka plików w różnych strukturach
-- `extractor.py` - wybiera katalog wyjściowy na podstawie struktury
+System automatycznego generowania projektów Blender VSE (Video Sequence Editor) z wyekstraktowanych nagrań OBS Canvas Recorder. Narzędzie tworzy gotowy do renderingu projekt Blender z uporządkowanymi ścieżkami wideo i audio.
 
-## Rozwiązanie: FileStructureManager
+## 🎯 Cel
 
-### Nowy moduł `src/core/file_structure.py`
+Automatyczne przygotowanie pliku `.blend` zawierającego:
+- Wyekstraktowane pliki wideo na osobnych ścieżkach VSE
+- Główną ścieżkę audio z oryginalnego nagrania canvas na ścieżce VSE
+- Skonfigurowane parametry renderingu (720p, MP4)
+- Ustawioną ścieżkę wyjściową renderingu
 
-#### Klasa RecordingStructure
-```python
-@dataclass
-class RecordingStructure:
-    """Reprezentuje strukturę katalogów nagrania."""
-    recording_dir: Path          # Katalog główny nagrania
-    video_file: Path            # Plik wideo nagrania
-    metadata_file: Path         # Plik metadanych (zawsze metadata.json)
-    extracted_dir: Path         # Katalog extracted/
+## 📁 Struktura Wejściowa
+
+```
+nazwa_nagrania/
+├── nazwa_nagrania.mkv          # Oryginalne nagranie canvas
+├── metadata.json               # Metadane sceny
+└── extracted/                  # Wyekstraktowane pliki
+    ├── Camera1.mp4             # Video z Camera1
+    ├── Main audio.m4a          # Audio wekstrachowane z Canvas
+    ├── ScreenCapture.mp4       # Video z ScreenCapture
+    └── ...
 ```
 
-#### Klasa FileStructureManager
-```python
-class FileStructureManager:
-    """Centralne zarządzanie strukturą katalogów nagrań."""
-    
-    @staticmethod
-    def get_structure(video_path: Path) -> RecordingStructure:
-        """Zwraca strukturę katalogów dla danego pliku wideo."""
-        
-    @staticmethod
-    def create_structure(video_path: Path) -> RecordingStructure:
-        """Tworzy nową strukturę katalogów."""
-        
-    @staticmethod
-    def get_extracted_dir(video_path: Path) -> Path:
-        """Zwraca katalog extracted/ dla danego nagrania."""
-        
-    @staticmethod
-    def get_metadata_file(video_path: Path) -> Path:
-        """Zwraca ścieżkę do pliku metadata.json."""
-        
-    @staticmethod
-    def create_recording_directory_name(video_path: Path) -> str:
-        """Tworzy nazwę katalogu nagrania na podstawie pliku wideo."""
+## 📁 Struktura Wyjściowa
+
+```
+nazwa_nagrania/
+├── nazwa_nagrania.mkv          # Oryginalne nagranie
+├── metadata.json               # Metadane
+├── extracted/                  # Wyekstraktowane pliki
+└── blender/                    # ← Nowy katalog
+    ├── nazwa_nagrania.blend    # Projekt Blender
+    └── render/                 # Katalog docelowy renderingu
 ```
 
-## Struktura katalogów
+## 🎬 Konfiguracja VSE
 
-### Jedyna obsługiwana struktura
+### Ścieżki Video (Channels)
+- **Channel 1**: Pierwszy plik wideo (.mp4)
+- **Channel 2**: Drugi plik wideo (.mp4)
+- **Channel N**: N-ty plik wideo (.mp4)
+
+### Ścieżki Audio (Channels)
+- **Channel 1**: Główna ścieżka audio z canvas (`audio_main.m4a`)
+
+### Timing
+- **Start Frame**: Wszystkie ścieżki zaczynają się od frame 1
+- **Długość**: Bazowana na długości głównej ścieżki audio
+- **FPS**: Z metadata.json lub domyślnie 30fps
+
+## ⚙️ Parametry Renderingu
+
+### Rozdzielczość
+- **Preset**: HD 720p (1280x720)
+- **Aspect Ratio**: 16:9
+
+### Format Wyjściowy
+- **Container**: MP4
+- **Video Codec**: H.264
+- **Audio Codec**: AAC
+- **Quality**: High (CRF 18)
+
+### Ścieżka Wyjściowa
+- **Katalog**: `{nazwa_nagrania}/blender/render/`
+- **Nazwa pliku**: `{nazwa_nagrania}_final.mp4`
+
+## 🔧 Interface CLI
+
+### Komenda
+```bash
+python -m cli.blend_setup <katalog_nagrania>
 ```
-/ścieżka/do/nagrań/
-├── nagranie_2025-01-06_15-30-00/
-│   ├── nagranie_2025-01-06_15-30-00.mkv
-│   ├── metadata.json
-│   └── extracted/
-│       ├── source1.mp4
-│       └── source2.m4a
+
+### Przykład użycia
+```bash
+# Podstawowe użycie
+python -m cli.blend_setup ./recording_20250105_143022
+
+# Z verbose output
+python -m cli.blend_setup ./recording_20250105_143022 --verbose
+
+# Pomoc
+python -m cli.blend_setup --help
+
+# Ścieżka do głóœnego audio
+python -m cli.blend_setup --main-audio main_audio.m4a
+
 ```
 
-## Refaktoring istniejących modułów
+### Argumenty
+- `recording_dir`: Ścieżka do katalogu nagrania (wymagane)
+- `--verbose, -v`: Szczegółowe logowanie (opcjonalne)
+- `--force, -f`: Nadpisz istniejący plik .blend (opcjonalne)
 
-### obs_script.py
-- Użycie `FileStructureManager.create_structure()`
-- Eliminacja duplikacji logiki tworzenia katalogów
+## 📊 Wymagania Funkcjonalne
 
-### extract.py
-- Zastąpienie `find_metadata_file()` przez `FileStructureManager.get_metadata_file()`
-- Użycie `FileStructureManager.get_extracted_dir()`
+### RF-001: Walidacja Struktury
+- System musi sprawdzić czy katalog zawiera wymaganą strukturę
+- Musi istnieć plik `metadata.json` i katalog `extracted/`
+- Musi istnieć co najmniej jeden plik wideo lub audio w `extracted/`
 
-### extractor.py
-- Zastąpienie logiki wyboru katalogu wyjściowego
-- Użycie `FileStructureManager.get_extracted_dir()`
+### RF-002: Główne Audio z Canvas
+- System zna główną ścieżkę audio z oryginalnego nagrania - jeżeli plików audio w katalogu extracted jest więcej niż jeden - zgłasza błąd i wymaga podania parametru z nazwą pliku audio 
 
-### advanced_scene_switcher_extractor.py
-- Uproszczenie logiki wyszukiwania plików
-- Użycie `FileStructureManager.get_structure()`
+### RF-003: Tworzenie Projektu Blender
+- System musi utworzyć nowy projekt Blender z czystą sceną
+- Musi skonfigurować VSE z odpowiednimi ścieżkami
+- Musi ustawić parametry renderingu zgodnie ze specyfikacją
 
-## Korzyści
+### RF-004: Organizacja Ścieżek VSE
+- Pliki wideo na osobnych kanałach (1, 2, 3...)
+- Główna ścieżka audio na kanale 1 (audio)
+- Wszystkie ścieżki synchronizowane od frame 1
 
-### Techniczne
-- **DRY**: Eliminacja duplikacji kodu
-- **Single Responsibility**: Jedna klasa odpowiedzialna za strukturę
-- **Łatwość testowania**: Centralne testy logiki struktury
-- **Rozszerzalność**: Łatwe dodanie nowych struktur
+### RF-005: Konfiguracja Renderingu
+- Rozdzielczość: 1280x720 (HD)
+- Format: MP4 (H.264 + AAC)
+- Ścieżka wyjściowa: `{katalog}/blender/render/`
+- Nazwa pliku: `{nazwa_nagrania}_final.mp4`
 
-### Utrzymaniowe
-- **Łatwość zmian**: Modyfikacje w jednym miejscu
-- **Czytelność**: Jasne API do pracy ze strukturą
-- **Debugowanie**: Centralne logowanie operacji
+## 🚨 Wymagania Niefunkcjonalne
 
-## Wymagania techniczne
 
-### Zależności
-- Python `pathlib` dla manipulacji ścieżkami
-- `dataclasses` dla RecordingStructure
-- `typing` dla type hints
+### RNF-002: Kompatybilność
+- Blender 4.0+ (Python API)
+- FFmpeg 4.4+ (ekstrakcja audio)
+- Python 3.9+ (zgodność z istniejącym systemem)
 
-### Obsługa błędów
-- Graceful handling błędów przy tworzeniu katalogów
+### RNF-003: Niezawodność
+- Walidacja wszystkich plików wejściowych
+- Obsługa błędów FFmpeg i Blender API
+- Rollback przy niepowodzeniu
+
+### RNF-004: Użyteczność
+- Jasne komunikaty o błędach
+- Progress bar dla długich operacji
+- Verbose mode dla debugowania
+
+## 🔍 Przypadki Użycia
+
+### UC-001: Podstawowe Tworzenie Projektu
+1. Użytkownik uruchamia `python -m cli.blend_setup ./recording_dir`
+2. System waliduje strukturę katalogu
+3. System tworzy projekt Blender VSE
+4. System konfiguruje ścieżki i parametry renderingu
+5. System zapisuje plik `.blend`
+
+### UC-002: Nadpisanie Istniejącego Projektu
+1. Użytkownik uruchamia z flagą `--force`
+2. System pyta o potwierdzenie nadpisania
+3. System usuwa stary plik `.blend`
+4. System tworzy nowy projekt
+
+### UC-003: Obsługa Błędów
+1. System wykrywa nieprawidłową strukturę
+2. System wyświetla szczegółowy komunikat błędu
+3. System kończy działanie z kodem błędu
+
+## 📋 Kryteria Akceptacji
+
+### AC-001: Struktura Wyjściowa
+- [x] Utworzony katalog `blender/`
+- [x] Plik `nazwa_nagrania.blend` istnieje
+- [x] Katalog `render/` istnieje
+
+### AC-002: Konfiguracja VSE
+- [x] Wszystkie pliki wideo na osobnych kanałach
+- [x] Główna ścieżka audio na kanale 1
+- [x] Wszystkie ścieżki zaczynają się od frame 1
+
+### AC-003: Parametry Renderingu
+- [x] Rozdzielczość: 1280x720
+- [x] Format: MP4
+- [x] Ścieżka wyjściowa: `{katalog}/blender/render/`
+- [x] Nazwa pliku: `{nazwa_nagrania}_final.mp4`
+
+### AC-004: Interface CLI
+- [x] Komenda `python -m cli.blend_setup` działa
+- [x] Argumenty są poprawnie parsowane
+- [x] Pomoc (`--help`) jest dostępna
+- [x] Verbose mode (`--verbose`) działa
+
+## 🧪 Strategia Testowa
+
+### Testy Jednostkowe
 - Walidacja struktury katalogów
-- Logowanie operacji
+- Parsowanie argumentów CLI
+- Konfiguracja parametrów Blender
 
-### Testy
-- Testy jednostkowe dla każdej metody
-- Testy integracyjne z istniejącymi modułami
-- Testy tworzenia i walidacji struktury
+### Testy Integracyjne
+- Ekstrakcja audio przez FFmpeg
+- Tworzenie projektu Blender
+- Zapis pliku `.blend`
 
-## Kryteria sukcesu
+### Testy E2E
+- Pełny workflow od katalogu do projektu
+- Różne scenariusze plików wejściowych
+- Obsługa błędów i edge cases
 
-1. ✅ Cała logika struktury katalogów w jednym module
-2. ✅ Eliminacja duplikacji kodu
-3. ✅ Obsługa tylko nowej struktury katalogów
-4. ✅ Wszystkie testy przechodzą
-5. ✅ Kod jest czytelniejszy i łatwiejszy w utrzymaniu
-6. ✅ Uproszczenie kodu przez eliminację legacy support
+## 📚 Zależności
+
+### Nowe Zależności
+- `bpy` (Blender Python API) - do tworzenia projektów
+- Opcjonalnie: `bpy` jako moduł lub wywołanie zewnętrzne
+
+### Istniejące Zależności
+- `ffmpeg` - ekstrakcja audio
+- `pathlib` - operacje na plikach
+- `argparse` - parsowanie argumentów
+- `json` - czytanie metadanych
+
+## 🔄 Integracja z Istniejącym Systemem
+
+### Współdzielone Komponenty
+- `FileStructureManager` - zarządzanie strukturą plików
+- `metadata.py` - czytanie metadanych
+- `cli/` - struktura CLI
+
+### Nowe Komponenty
+- `cli/blend_setup.py` - główny interface CLI
+- `core/blender_project.py` - logika tworzenia projektów
