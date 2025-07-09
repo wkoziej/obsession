@@ -48,6 +48,53 @@ class TestParseArgs:
             assert args.force is True
             assert args.main_audio == "audio.mp3"
 
+    def test_parse_args_audio_analysis_flags(self):
+        """Test parsing audio analysis arguments."""
+        with patch(
+            "sys.argv",
+            [
+                "blend_setup.py",
+                "/path/to/recording",
+                "--animation-mode",
+                "beat-switch",
+                "--beat-division",
+                "4",
+            ],
+        ):
+            args = parse_args()
+            assert args.recording_dir == Path("/path/to/recording")
+            assert args.animation_mode == "beat-switch"
+            assert args.beat_division == 4
+
+    def test_parse_args_audio_analysis_defaults(self):
+        """Test default values for audio analysis arguments."""
+        with patch("sys.argv", ["blend_setup.py", "/path/to/recording"]):
+            args = parse_args()
+            assert args.animation_mode == "none"
+            assert args.beat_division == 8
+
+    def test_parse_args_analyze_audio_flag(self):
+        """Test --analyze-audio flag."""
+        with patch(
+            "sys.argv",
+            [
+                "blend_setup.py",
+                "/path/to/recording",
+                "--analyze-audio",
+                "--animation-mode",
+                "energy-pulse",
+            ],
+        ):
+            args = parse_args()
+            assert args.analyze_audio is True
+            assert args.animation_mode == "energy-pulse"
+
+    def test_parse_args_analyze_audio_default(self):
+        """Test default value for --analyze-audio flag."""
+        with patch("sys.argv", ["blend_setup.py", "/path/to/recording"]):
+            args = parse_args()
+            assert args.analyze_audio is False
+
     def test_parse_args_short_flags(self):
         """Test parsing short flag versions."""
         with patch("sys.argv", ["blend_setup.py", "/path/to/recording", "-v", "-f"]):
@@ -191,6 +238,9 @@ class TestMain:
         mock_args.recording_dir = Path("/test/recording")
         mock_args.verbose = False
         mock_args.main_audio = None
+        mock_args.analyze_audio = False
+        mock_args.animation_mode = "none"
+        mock_args.beat_division = 8
         mock_parse_args.return_value = mock_args
 
         mock_manager = Mock()
@@ -207,7 +257,7 @@ class TestMain:
         mock_setup_logging.assert_called_once_with(False)
         mock_validate.assert_called_once_with(mock_args.recording_dir)
         mock_manager.create_vse_project.assert_called_once_with(
-            mock_args.recording_dir, None
+            mock_args.recording_dir, None, animation_mode="none", beat_division=8
         )
         mock_print.assert_called_once()
 
@@ -284,3 +334,84 @@ class TestMain:
         # Verify
         assert result == 1
         mock_print.assert_called_once()
+
+
+class TestBlendSetupAudioIntegration:
+    """Test cases for blend_setup CLI with audio analysis integration."""
+
+    @patch("src.cli.blend_setup.parse_args")
+    @patch("src.cli.blend_setup.setup_logging")
+    @patch("src.cli.blend_setup.validate_recording_directory")
+    @patch("src.cli.blend_setup.BlenderProjectManager")
+    @patch("src.cli.blend_setup.find_main_audio_file")
+    @patch("src.cli.blend_setup.perform_audio_analysis")
+    @patch("builtins.print")
+    def test_main_with_audio_analysis(
+        self,
+        mock_print,
+        mock_perform_analysis,
+        mock_find_audio,
+        mock_manager_class,
+        mock_validate,
+        mock_setup_logging,
+        mock_parse_args,
+    ):
+        """Test main function with audio analysis enabled."""
+        # Setup mocks
+        mock_args = Mock()
+        mock_args.recording_dir = Path("/test/recording")
+        mock_args.verbose = False
+        mock_args.main_audio = None
+        mock_args.analyze_audio = True
+        mock_args.animation_mode = "beat-switch"
+        mock_args.beat_division = 4
+        mock_parse_args.return_value = mock_args
+
+        mock_manager = Mock()
+        mock_manager.create_vse_project.return_value = Path("/test/output.blend")
+        mock_manager_class.return_value = mock_manager
+
+        # Mock audio file detection
+        main_audio_file = Path("/test/recording/extracted/main_audio.m4a")
+        mock_find_audio.return_value = main_audio_file
+
+        # Mock analysis
+        analysis_file = Path("/test/recording/analysis/audio_analysis.json")
+        mock_perform_analysis.return_value = analysis_file
+
+        # Execute
+        result = main()
+
+        # Verify
+        assert result == 0
+        mock_find_audio.assert_called_once_with(mock_args.recording_dir)
+        mock_perform_analysis.assert_called_once_with(
+            mock_args.recording_dir, main_audio_file
+        )
+        mock_manager.create_vse_project.assert_called_once_with(
+            mock_args.recording_dir,
+            mock_args.main_audio,
+            animation_mode="beat-switch",
+            beat_division=4,
+        )
+
+    def test_validate_animation_parameters_valid(self):
+        """Test validation of valid animation parameters."""
+        from src.cli.blend_setup import validate_animation_parameters
+
+        # Valid combinations
+        validate_animation_parameters("none", 8)
+        validate_animation_parameters("beat-switch", 4)
+        validate_animation_parameters("energy-pulse", 16)
+
+    def test_validate_animation_parameters_invalid(self):
+        """Test validation of invalid animation parameters."""
+        from src.cli.blend_setup import validate_animation_parameters
+
+        # Invalid animation mode
+        with pytest.raises(ValueError, match="Invalid animation mode"):
+            validate_animation_parameters("invalid-mode", 8)
+
+        # Invalid beat division
+        with pytest.raises(ValueError, match="Invalid beat division"):
+            validate_animation_parameters("beat-switch", 3)

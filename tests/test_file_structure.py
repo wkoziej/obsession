@@ -428,3 +428,183 @@ class TestFileStructureManager:
 
         assert len(found_videos) == 3
         assert all(f.suffix.lower() in [".mp4", ".mkv", ".avi"] for f in found_videos)
+
+
+class TestFileStructureAnalysisIntegration:
+    """Testy integracji FileStructureManager z audio analysis."""
+
+    def test_ensure_analysis_dir_creates_directory(self, tmp_path):
+        """Test ensure_analysis_dir() tworzy katalog analysis."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+
+        analysis_dir = FileStructureManager.ensure_analysis_dir(recording_dir)
+
+        assert analysis_dir == recording_dir / "analysis"
+        assert analysis_dir.exists()
+        assert analysis_dir.is_dir()
+
+    def test_ensure_analysis_dir_already_exists(self, tmp_path):
+        """Test ensure_analysis_dir() gdy katalog już istnieje."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+
+        # Utwórz katalog analysis
+        existing_analysis = recording_dir / "analysis"
+        existing_analysis.mkdir()
+
+        analysis_dir = FileStructureManager.ensure_analysis_dir(recording_dir)
+
+        assert analysis_dir == existing_analysis
+        assert analysis_dir.exists()
+        assert analysis_dir.is_dir()
+
+    def test_get_analysis_file_path(self, tmp_path):
+        """Test get_analysis_file_path() zwraca poprawną ścieżkę."""
+        recording_dir = tmp_path / "test_recording"
+        video_file = recording_dir / "test_recording.mkv"
+
+        analysis_path = FileStructureManager.get_analysis_file_path(video_file)
+
+        expected = recording_dir / "analysis" / "test_recording_audio_analysis.json"
+        assert analysis_path == expected
+
+    def test_save_audio_analysis_creates_structure(self, tmp_path):
+        """Test save_audio_analysis() tworzy katalog i zapisuje plik."""
+        recording_dir = tmp_path / "test_recording"
+        video_file = recording_dir / "test_recording.mkv"
+
+        analysis_data = {
+            "duration": 10.0,
+            "tempo": {"bpm": 120.0},
+            "animation_events": {"beats": [1.0, 2.0, 3.0]},
+        }
+
+        saved_path = FileStructureManager.save_audio_analysis(video_file, analysis_data)
+
+        # Sprawdź czy katalog analysis został utworzony
+        analysis_dir = recording_dir / "analysis"
+        assert analysis_dir.exists()
+        assert analysis_dir.is_dir()
+
+        # Sprawdź czy plik został zapisany
+        expected_path = analysis_dir / "test_recording_audio_analysis.json"
+        assert saved_path == expected_path
+        assert saved_path.exists()
+
+        # Sprawdź zawartość pliku
+        import json
+
+        with open(saved_path) as f:
+            loaded_data = json.load(f)
+        assert loaded_data == analysis_data
+
+    def test_find_audio_analysis_file_exists(self, tmp_path):
+        """Test find_audio_analysis() gdy plik istnieje."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+        video_file = recording_dir / "test_recording.mkv"
+
+        # Utwórz katalog analysis i plik
+        analysis_dir = recording_dir / "analysis"
+        analysis_dir.mkdir()
+        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+        analysis_file.write_text('{"test": "data"}')
+
+        found_path = FileStructureManager.find_audio_analysis(video_file)
+
+        assert found_path == analysis_file
+        assert found_path.exists()
+
+    def test_find_audio_analysis_file_not_exists(self, tmp_path):
+        """Test find_audio_analysis() gdy plik nie istnieje."""
+        recording_dir = tmp_path / "test_recording"
+        video_file = recording_dir / "test_recording.mkv"
+
+        found_path = FileStructureManager.find_audio_analysis(video_file)
+
+        assert found_path is None
+
+    def test_load_audio_analysis_valid_file(self, tmp_path):
+        """Test load_audio_analysis() z poprawnym plikiem."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+        video_file = recording_dir / "test_recording.mkv"
+
+        # Utwórz plik analizy
+        analysis_data = {
+            "duration": 5.0,
+            "tempo": {"bpm": 140.0},
+            "animation_events": {"beats": [0.5, 1.0, 1.5]},
+        }
+
+        analysis_dir = recording_dir / "analysis"
+        analysis_dir.mkdir()
+        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+
+        import json
+
+        with open(analysis_file, "w") as f:
+            json.dump(analysis_data, f)
+
+        loaded_data = FileStructureManager.load_audio_analysis(video_file)
+
+        assert loaded_data == analysis_data
+
+    def test_load_audio_analysis_missing_file(self, tmp_path):
+        """Test load_audio_analysis() z brakującym plikiem."""
+        recording_dir = tmp_path / "test_recording"
+        video_file = recording_dir / "test_recording.mkv"
+
+        loaded_data = FileStructureManager.load_audio_analysis(video_file)
+
+        assert loaded_data is None
+
+    def test_load_audio_analysis_invalid_json(self, tmp_path):
+        """Test load_audio_analysis() z niepoprawnym JSON."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+        video_file = recording_dir / "test_recording.mkv"
+
+        # Utwórz plik z niepoprawnym JSON
+        analysis_dir = recording_dir / "analysis"
+        analysis_dir.mkdir()
+        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+        analysis_file.write_text("invalid json content")
+
+        loaded_data = FileStructureManager.load_audio_analysis(video_file)
+
+        assert loaded_data is None
+
+    def test_complete_structure_with_analysis(self, tmp_path):
+        """Test pełnej struktury z katalogiem analysis."""
+        recording_dir = tmp_path / "test_recording"
+        recording_dir.mkdir()
+
+        video_file = recording_dir / "test.mkv"
+        video_file.touch()
+
+        metadata_file = recording_dir / "metadata.json"
+        metadata_file.write_text('{"test": "data"}')
+
+        # Utwórz wszystkie katalogi
+        FileStructureManager.ensure_extracted_dir(video_file)
+        FileStructureManager.ensure_blender_dir(recording_dir)
+        FileStructureManager.ensure_analysis_dir(recording_dir)
+
+        # Sprawdź pełną strukturę
+        expected_dirs = [
+            recording_dir / "extracted",
+            recording_dir / "blender",
+            recording_dir / "blender" / "render",
+            recording_dir / "analysis",
+        ]
+
+        for expected_dir in expected_dirs:
+            assert expected_dir.exists()
+            assert expected_dir.is_dir()
+
+        # Sprawdź że find_recording_structure nadal działa
+        structure = FileStructureManager.find_recording_structure(recording_dir)
+        assert structure is not None
+        assert structure.is_valid()

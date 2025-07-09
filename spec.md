@@ -37,10 +37,20 @@ Zademonstrowanie możliwości automatycznego tworzenia animacji PiP (Picture-in-
 - Analiza: JSON z eventami i danymi czasowymi
 - Wyjście: projekt .blend z animacjami
 
-### 3.3 Ograniczenia PoC
+### 3.3 Blender VSE API - kluczowe komponenty
+- `bpy.context.scene.sequence_editor` - główny interfejs VSE
+- `sequencer.sequences` - lista wszystkich strip'ów
+- `strip.blend_alpha` - kontrola przezroczystości (0.0-1.0)
+- `strip.transform.offset_x/y` - pozycja PiP w pikselach
+- `strip.transform.scale_x/y` - skala PiP (1.0 = 100%)
+- `strip.keyframe_insert(data_path, frame)` - dodawanie keyframe'ów
+- `strip.frame_start/frame_final_end` - pozycja na timeline
+
+### 3.4 Ograniczenia PoC
 - Maksymalnie 4 źródła PiP
 - Tylko podstawowe efekty (pozycja, skala, przezroczystość)
 - Brak złożonych przejść czy efektów cząsteczkowych
+- Animacje oparte na keyframe'ach z linear interpolation
 
 ## 4. Kryteria sukcesu
 
@@ -66,28 +76,19 @@ Zademonstrowanie możliwości automatycznego tworzenia animacji PiP (Picture-in-
 - Proces: analiza audio → generowanie eventów → animacje PiP
 - Wyjście: dynamiczny montaż z przełączaniem kamer w rytm
 
-### UC2: Podcast z reakcjami
-- Wejście: 2 źródła (host + gość) + audio
-- Proces: detekcja mowy → podświetlanie aktywnego mówcy
-- Wyjście: automatyczne focus na mówiącego
-
-### UC3: Gameplay z komentarzem
-- Wejście: gameplay + kamera gracza + audio
-- Proces: analiza energii → PiP reaguje na emocje
-- Wyjście: dynamiczne pojawianie się gracza w momentach akcji
 
 ## 6. Interfejs użytkownika
 
 ### 6.1 CLI
 ```bash
 # Analiza audio
-python -m cli.analyze_audio recording_20250105_143022/main_audio.m4a
+python -m cli.analyze_audio recording_20250105_143022/extracted/main_audio.m4a ./analysis
 
 # Tworzenie projektu z animacjami
-python -m cli.blend_setup recording_20250105_143022 --with-audio-animation
+python -m cli.blend_setup recording_20250105_143022 --analyze-audio --animation-mode beat-switch
 
-# Wybór trybu animacji
-python -m cli.blend_setup recording_20250105_143022 --animation-mode beat-switch
+# Wybór trybu animacji i beat division
+python -m cli.blend_setup recording_20250105_143022 --animation-mode energy-pulse --beat-division 4
 ```
 
 ### 6.2 Parametry w Blenderze

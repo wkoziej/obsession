@@ -254,33 +254,16 @@ class TestAudioAnalyzerIntegration:
     """Integration tests with real audio processing (if libraries available)."""
 
     @pytest.fixture
-    def sample_audio_path(self, tmp_path):
-        """Create a simple test audio file."""
-        # This would ideally use a real audio file from fixtures
-        # For now, we'll skip if librosa is not available
-        try:
-            import soundfile as sf
+    def sample_audio_path(self):
+        """Get path to test audio file from fixtures."""
+        audio_file = (
+            Path(__file__).parent / "fixtures" / "audio" / "beats_120bpm_5s.wav"
+        )
 
-            # Create 2 seconds of sine wave
-            sr = 22050
-            duration = 2.0
-            frequency = 440.0  # A4 note
+        if not audio_file.exists():
+            pytest.skip(f"Audio fixture not found: {audio_file}")
 
-            t = np.linspace(0, duration, int(sr * duration))
-            audio = 0.5 * np.sin(2 * np.pi * frequency * t)
-
-            # Add some beats
-            beat_frequency = 2.0  # 2 Hz = 120 BPM
-            envelope = 0.5 + 0.5 * np.sin(2 * np.pi * beat_frequency * t)
-            audio = audio * envelope
-
-            audio_file = tmp_path / "test_audio.wav"
-            sf.write(str(audio_file), audio, sr)
-
-            return audio_file
-
-        except ImportError:
-            pytest.skip("librosa/soundfile not available for integration test")
+        return audio_file
 
     def test_real_audio_analysis(self, sample_audio_path):
         """Test analysis with real audio file."""

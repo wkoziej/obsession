@@ -33,7 +33,11 @@ class BlenderProjectManager:
         self.script_path = Path(__file__).parent / "blender_vse_script.py"
 
     def create_vse_project(
-        self, recording_path: Path, main_audio_name: Optional[str] = None
+        self,
+        recording_path: Path,
+        main_audio_name: Optional[str] = None,
+        animation_mode: str = "none",
+        beat_division: int = 8,
     ) -> Path:
         """
         Create a Blender VSE project from extracted OBS recording.
@@ -41,6 +45,8 @@ class BlenderProjectManager:
         Args:
             recording_path: Path to the recording directory
             main_audio_name: Optional name of main audio file
+            animation_mode: Animation mode for VSE ("none", "beat-switch", etc.)
+            beat_division: Beat division for animation timing
 
         Returns:
             Path: Path to the created .blend file
@@ -53,6 +59,10 @@ class BlenderProjectManager:
         from .audio_validator import AudioValidator
 
         logger.info(f"Creating Blender VSE project for: {recording_path}")
+
+        # 0. Validate input parameters
+        self._validate_animation_mode(animation_mode)
+        self._validate_beat_division(beat_division)
 
         # 1. Validate recording structure
         structure = FileStructureManager.find_recording_structure(recording_path)
@@ -83,12 +93,34 @@ class BlenderProjectManager:
         # 6. Read FPS from metadata
         fps = self._read_fps_from_metadata(structure.metadata_file)
 
-        # 7. Set up environment variables for the parametric script
-        env_vars = self._prepare_environment_variables(
-            video_files, main_audio, output_blend, render_output, fps
+        # 7. Load audio analysis if available and requested
+        analysis_data = None
+        if animation_mode != "none":
+            # Try to find main video file for analysis
+            main_video = structure.video_file
+            analysis_data = FileStructureManager.load_audio_analysis(main_video)
+            if analysis_data:
+                logger.info(
+                    f"Loaded audio analysis for animation mode: {animation_mode}"
+                )
+            else:
+                logger.warning(
+                    f"No audio analysis found for animation mode {animation_mode}"
+                )
+
+        # 8. Set up environment variables for the parametric script
+        env_vars = self._prepare_environment_variables_with_analysis(
+            video_files,
+            main_audio,
+            output_blend,
+            render_output,
+            fps,
+            analysis_data,
+            animation_mode,
+            beat_division,
         )
 
-        # 8. Execute Blender with the parametric script
+        # 9. Execute Blender with the parametric script
         try:
             self._execute_blender_with_params(env_vars)
             logger.info(f"Blender project created successfully: {output_blend}")
@@ -232,3 +264,114 @@ class BlenderProjectManager:
         # Sort for consistent ordering
         video_files.sort(key=lambda x: x.name)
         return video_files
+
+    def _prepare_environment_variables_with_analysis(
+        self,
+        video_files: List[Path],
+        main_audio: Path,
+        output_blend: Path,
+        render_output: Path,
+        fps: int = 30,
+        analysis_data: Optional[dict] = None,
+        animation_mode: str = "none",
+        beat_division: int = 8,
+    ) -> dict:
+        """
+        Prepare environment variables for the parametric Blender script with audio analysis.
+
+        Args:
+            video_files: List of video files to add to VSE
+            main_audio: Main audio file path
+            output_blend: Output .blend file path
+            render_output: Render output path
+            fps: Frames per second
+            analysis_data: Optional audio analysis data
+            animation_mode: Animation mode for VSE
+            beat_division: Beat division for animation timing
+
+        Returns:
+            dict: Environment variables for the script
+        """
+        # Start with basic environment variables
+        env_vars = self._prepare_environment_variables(
+            video_files, main_audio, output_blend, render_output, fps
+        )
+
+        # Add audio analysis specific variables
+        env_vars.update(
+            {
+                "BLENDER_VSE_ANIMATION_MODE": animation_mode,
+                "BLENDER_VSE_BEAT_DIVISION": str(beat_division),
+                "BLENDER_VSE_AUDIO_ANALYSIS": self._serialize_analysis_data(
+                    analysis_data
+                ),
+            }
+        )
+
+        logger.debug(
+            f"Prepared environment variables with analysis: {list(env_vars.keys())}"
+        )
+        return env_vars
+
+    def _serialize_analysis_data(self, analysis_data: Optional[dict]) -> str:
+        """
+        Serialize audio analysis data to JSON string for environment variable.
+
+        Args:
+            analysis_data: Audio analysis data or None
+
+        Returns:
+            str: JSON string of analysis data or empty string
+        """
+        if not analysis_data:
+            return ""
+
+        try:
+            import json
+
+            return json.dumps(analysis_data)
+        except Exception as e:
+            logger.warning(f"Failed to serialize analysis data: {e}")
+            return ""
+
+    def _validate_animation_mode(self, mode: str) -> None:
+        """
+        Validate animation mode parameter.
+
+        Args:
+            mode: Animation mode string
+
+        Raises:
+            ValueError: If mode is not valid
+        """
+        valid_modes = {
+            "none",
+            "beat-switch",
+            "energy-pulse",
+            "section-transition",
+            "multi-pip",
+        }
+
+        if mode not in valid_modes:
+            raise ValueError(
+                f"Invalid animation mode: {mode}. "
+                f"Valid modes: {', '.join(sorted(valid_modes))}"
+            )
+
+    def _validate_beat_division(self, division: int) -> None:
+        """
+        Validate beat division parameter.
+
+        Args:
+            division: Beat division value
+
+        Raises:
+            ValueError: If division is not valid
+        """
+        valid_divisions = {1, 2, 4, 8, 16}
+
+        if division not in valid_divisions:
+            raise ValueError(
+                f"Invalid beat division: {division}. "
+                f"Valid divisions: {', '.join(map(str, sorted(valid_divisions)))}"
+            )

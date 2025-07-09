@@ -198,14 +198,11 @@ class TestAudioAnalyzerIntegration:
 def test_cli_style_usage(tmp_path):
     """Test typical CLI usage pattern."""
     # This test simulates how the CLI will use the analyzer
-    from tests.fixtures.audio.generate_test_audio import (
-        generate_beat_pattern,
-        save_audio_file,
-    )
+    # Use existing fixture file instead of generating on the fly
+    audio_file = Path(__file__).parent / "fixtures" / "audio" / "beats_120bpm_5s.wav"
 
-    # Generate test audio
-    audio = generate_beat_pattern(140, 3.0)  # 140 BPM, 3 seconds
-    audio_file = save_audio_file(audio, "test_cli_140bpm.wav")
+    if not audio_file.exists():
+        pytest.skip(f"Audio fixture not found: {audio_file}")
 
     # Create analyzer
     analyzer = AudioAnalyzer()
@@ -235,6 +232,3 @@ def test_cli_style_usage(tmp_path):
         key in data["animation_events"]
         for key in ["beats", "sections", "onsets", "energy_peaks"]
     )
-
-    # Clean up generated file
-    audio_file.unlink()

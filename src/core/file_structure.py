@@ -59,6 +59,7 @@ class FileStructureManager:
 
     METADATA_FILENAME = "metadata.json"
     EXTRACTED_DIRNAME = "extracted"
+    ANALYSIS_DIRNAME = "analysis"
 
     @staticmethod
     def get_structure(video_path: Path) -> RecordingStructure:
@@ -280,3 +281,110 @@ class FileStructureManager:
         video_files.sort(key=lambda x: x.name)
         logger.debug(f"Znaleziono {len(video_files)} plików wideo w {extracted_dir}")
         return video_files
+
+    @staticmethod
+    def ensure_analysis_dir(recording_dir: Path) -> Path:
+        """
+        Tworzy katalog analysis/ w strukturze nagrania.
+
+        Args:
+            recording_dir: Ścieżka do katalogu nagrania
+
+        Returns:
+            Path: Ścieżka do katalogu analysis/
+        """
+        analysis_dir = recording_dir / FileStructureManager.ANALYSIS_DIRNAME
+        analysis_dir.mkdir(parents=True, exist_ok=True)
+
+        logger.info(f"Utworzono katalog analysis: {analysis_dir}")
+        return analysis_dir
+
+    @staticmethod
+    def get_analysis_file_path(video_path: Path) -> Path:
+        """
+        Zwraca ścieżkę do pliku analizy audio dla danego nagrania.
+
+        Args:
+            video_path: Ścieżka do pliku wideo nagrania
+
+        Returns:
+            Path: Ścieżka do pliku analizy audio
+        """
+        video_path = Path(video_path)
+        recording_dir = video_path.parent
+
+        # Nazwa pliku analizy bazuje na nazwie pliku wideo
+        base_name = video_path.stem
+        analysis_filename = f"{base_name}_audio_analysis.json"
+
+        return recording_dir / FileStructureManager.ANALYSIS_DIRNAME / analysis_filename
+
+    @staticmethod
+    def save_audio_analysis(video_path: Path, analysis_data: dict) -> Path:
+        """
+        Zapisuje dane analizy audio do pliku JSON.
+
+        Args:
+            video_path: Ścieżka do pliku wideo nagrania
+            analysis_data: Dane analizy audio do zapisania
+
+        Returns:
+            Path: Ścieżka do zapisanego pliku analizy
+        """
+        video_path = Path(video_path)
+        recording_dir = video_path.parent
+
+        # Upewnij się że katalog analysis istnieje
+        FileStructureManager.ensure_analysis_dir(recording_dir)
+
+        # Zapisz plik analizy
+        analysis_file = FileStructureManager.get_analysis_file_path(video_path)
+
+        with open(analysis_file, "w", encoding="utf-8") as f:
+            json.dump(analysis_data, f, indent=2)
+
+        logger.info(f"Zapisano analizę audio do: {analysis_file}")
+        return analysis_file
+
+    @staticmethod
+    def find_audio_analysis(video_path: Path) -> Optional[Path]:
+        """
+        Szuka pliku analizy audio dla danego nagrania.
+
+        Args:
+            video_path: Ścieżka do pliku wideo nagrania
+
+        Returns:
+            Optional[Path]: Ścieżka do pliku analizy lub None jeśli nie istnieje
+        """
+        analysis_file = FileStructureManager.get_analysis_file_path(video_path)
+
+        if analysis_file.exists():
+            return analysis_file
+        return None
+
+    @staticmethod
+    def load_audio_analysis(video_path: Path) -> Optional[dict]:
+        """
+        Ładuje dane analizy audio z pliku JSON.
+
+        Args:
+            video_path: Ścieżka do pliku wideo nagrania
+
+        Returns:
+            Optional[dict]: Dane analizy audio lub None jeśli plik nie istnieje/jest niepoprawny
+        """
+        analysis_file = FileStructureManager.find_audio_analysis(video_path)
+
+        if not analysis_file:
+            logger.debug(f"Brak pliku analizy audio dla: {video_path}")
+            return None
+
+        try:
+            with open(analysis_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            logger.debug(f"Załadowano analizę audio z: {analysis_file}")
+            return data
+        except (json.JSONDecodeError, IOError, OSError) as e:
+            logger.warning(f"Błąd odczytu pliku analizy {analysis_file}: {e}")
+            return None
