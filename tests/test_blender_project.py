@@ -19,12 +19,14 @@ class TestBlenderProjectManager:
         """Test BlenderProjectManager initialization with default executable."""
         manager = BlenderProjectManager()
         assert manager.blender_executable == "blender"
+        assert manager.script_path.name == "blender_vse_script.py"
 
     def test_init_custom_executable(self):
         """Test BlenderProjectManager initialization with custom executable."""
         custom_blender = "/usr/local/bin/blender"
         manager = BlenderProjectManager(custom_blender)
         assert manager.blender_executable == custom_blender
+        assert manager.script_path.name == "blender_vse_script.py"
 
     def test_create_vse_project_invalid_structure(self):
         """Test that create_vse_project raises ValueError for invalid structure."""
@@ -100,17 +102,63 @@ class TestBlenderProjectManager:
         assert len(found_videos) == 3
         assert all(f.suffix.lower() in [".mp4", ".mkv", ".avi"] for f in found_videos)
 
+    def test_prepare_environment_variables(self, tmp_path):
+        """Test preparation of environment variables for parametric script."""
+        manager = BlenderProjectManager()
+
+        # Create test files
+        video_files = [tmp_path / "video1.mp4", tmp_path / "video2.mkv"]
+        main_audio = tmp_path / "audio.m4a"
+        output_blend = tmp_path / "project.blend"
+        render_output = tmp_path / "render" / "output.mp4"
+
+        for file_path in video_files + [main_audio]:
+            file_path.touch()
+
+        env_vars = manager._prepare_environment_variables(
+            video_files, main_audio, output_blend, render_output, fps=25
+        )
+
+        # Check environment variables
+        assert "BLENDER_VSE_VIDEO_FILES" in env_vars
+        assert "BLENDER_VSE_MAIN_AUDIO" in env_vars
+        assert "BLENDER_VSE_OUTPUT_BLEND" in env_vars
+        assert "BLENDER_VSE_RENDER_OUTPUT" in env_vars
+        assert env_vars["BLENDER_VSE_FPS"] == "25"
+        assert env_vars["BLENDER_VSE_RESOLUTION_X"] == "1280"
+        assert env_vars["BLENDER_VSE_RESOLUTION_Y"] == "720"
+
+        # Check video files are comma-separated
+        video_files_str = env_vars["BLENDER_VSE_VIDEO_FILES"]
+        assert str(video_files[0].resolve()) in video_files_str
+        assert str(video_files[1].resolve()) in video_files_str
+        assert "," in video_files_str
+
+        # Check render output directory was created
+        assert render_output.parent.exists()
+
     @patch("subprocess.run")
-    def test_execute_blender_script_success(self, mock_run):
-        """Test successful execution of Blender script."""
+    def test_execute_blender_with_params_success(self, mock_run, tmp_path):
+        """Test successful execution of Blender with parameters."""
         mock_run.return_value = Mock(stdout="Success", stderr="")
 
         manager = BlenderProjectManager()
-        script_path = Path("/tmp/test_script.py")
-        output_blend = Path("/tmp/test.blend")
+        # Create mock script file
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
+
+        env_vars = {
+            "BLENDER_VSE_VIDEO_FILES": "/tmp/video1.mp4,/tmp/video2.mp4",
+            "BLENDER_VSE_MAIN_AUDIO": "/tmp/audio.m4a",
+            "BLENDER_VSE_OUTPUT_BLEND": "/tmp/project.blend",
+            "BLENDER_VSE_RENDER_OUTPUT": "/tmp/render/output.mp4",
+            "BLENDER_VSE_FPS": "30",
+            "BLENDER_VSE_RESOLUTION_X": "1280",
+            "BLENDER_VSE_RESOLUTION_Y": "720",
+        }
 
         # Should not raise exception
-        manager._execute_blender_script(script_path, output_blend)
+        manager._execute_blender_with_params(env_vars)
 
         # Check subprocess.run was called with correct arguments
         mock_run.assert_called_once()
@@ -121,23 +169,31 @@ class TestBlenderProjectManager:
             "blender",
             "--background",
             "--python",
-            str(script_path),
+            str(manager.script_path),
         ]
         assert kwargs["capture_output"] is True
         assert kwargs["text"] is True
         assert kwargs["check"] is True
 
+        # Check environment variables were passed
+        env = kwargs["env"]
+        for key, value in env_vars.items():
+            assert env[key] == value
+
     @patch("subprocess.run")
-    def test_execute_blender_script_custom_executable(self, mock_run):
+    def test_execute_blender_with_params_custom_executable(self, mock_run, tmp_path):
         """Test execution with custom Blender executable."""
         mock_run.return_value = Mock(stdout="Success", stderr="")
 
         manager = BlenderProjectManager("/usr/local/bin/blender")
-        script_path = Path("/tmp/test_script.py")
-        output_blend = Path("/tmp/test.blend")
+        # Create mock script file
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
+
+        env_vars = {"BLENDER_VSE_FPS": "30"}
 
         # Should not raise exception
-        manager._execute_blender_script(script_path, output_blend)
+        manager._execute_blender_with_params(env_vars)
 
         # Check subprocess.run was called with custom executable
         mock_run.assert_called_once()
@@ -146,22 +202,35 @@ class TestBlenderProjectManager:
             "/usr/local/bin/blender",
             "--background",
             "--python",
-            str(script_path),
+            str(manager.script_path),
         ]
 
+    def test_execute_blender_with_params_missing_script(self, tmp_path):
+        """Test execution when script file doesn't exist."""
+        manager = BlenderProjectManager()
+        manager.script_path = tmp_path / "nonexistent_script.py"
+
+        env_vars = {"BLENDER_VSE_FPS": "30"}
+
+        with pytest.raises(RuntimeError, match="Blender VSE script not found"):
+            manager._execute_blender_with_params(env_vars)
+
     @patch("subprocess.run")
-    def test_execute_blender_script_failure(self, mock_run):
-        """Test failed execution of Blender script."""
+    def test_execute_blender_with_params_failure(self, mock_run, tmp_path):
+        """Test failed execution of Blender with parameters."""
         mock_run.side_effect = subprocess.CalledProcessError(
             1, "blender", stderr="Blender error"
         )
 
         manager = BlenderProjectManager()
-        script_path = Path("/tmp/test_script.py")
-        output_blend = Path("/tmp/test.blend")
+        # Create mock script file
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
+
+        env_vars = {"BLENDER_VSE_FPS": "30"}
 
         with pytest.raises(RuntimeError, match="Blender execution failed"):
-            manager._execute_blender_script(script_path, output_blend)
+            manager._execute_blender_with_params(env_vars)
 
     def test_create_vse_project_no_video_files(self, sample_recording_structure):
         """Test create_vse_project with no video files."""
@@ -176,12 +245,17 @@ class TestBlenderProjectManager:
             manager.create_vse_project(sample_recording_structure)
 
     @patch("subprocess.run")
-    def test_create_vse_project_success(self, mock_run, sample_recording_structure):
+    def test_create_vse_project_success(
+        self, mock_run, sample_recording_structure, tmp_path
+    ):
         """Test successful create_vse_project execution."""
         # Mock successful subprocess execution
         mock_run.return_value = Mock(stdout="Success", stderr="")
 
         manager = BlenderProjectManager()
+        # Create mock script file
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
 
         # Should not raise exception and return blend path
         result = manager.create_vse_project(sample_recording_structure)
@@ -198,106 +272,55 @@ class TestBlenderProjectManager:
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args[:3] == ["snap", "run", "blender"]
-        assert "--background" in args
-        assert "--python" in args
-
-    def test_generate_blender_script_content(self, tmp_path):
-        """Test _generate_blender_script_content generates valid script."""
-        manager = BlenderProjectManager()
-
-        # Create test files
-        video_files = [tmp_path / "video1.mp4", tmp_path / "video2.mp4"]
-        main_audio = tmp_path / "audio.m4a"
-        output_blend = tmp_path / "project.blend"
-        render_output = tmp_path / "render.mp4"
-
-        for file_path in video_files + [main_audio]:
-            file_path.touch()
-
-        # Generate script content
-        script_content = manager._generate_blender_script_content(
-            video_files, main_audio, output_blend, render_output, fps=30
-        )
-
-        # Verify script contains expected elements
-        assert "import bpy" in script_content
-        assert "setup_vse_project" in script_content
-        assert "sequence_editor_create" in script_content
-        assert "resolution_x = 1280" in script_content
-        assert "resolution_y = 720" in script_content
-        assert str(video_files[0].resolve()) in script_content
-        assert str(main_audio.resolve()) in script_content
-        assert str(output_blend.resolve()) in script_content
-
-    def test_create_blender_script_creates_file(self, tmp_path):
-        """Test that _create_blender_script creates a temporary file."""
-        manager = BlenderProjectManager()
-
-        # Create test files
-        video_files = [tmp_path / "video1.mp4"]
-        main_audio = tmp_path / "audio.m4a"
-        output_blend = tmp_path / "project.blend"
-        render_output = tmp_path / "render.mp4"
-
-        for file_path in video_files + [main_audio]:
-            file_path.touch()
-
-        # Create script
-        script_path = manager._create_blender_script(
-            video_files, main_audio, output_blend, render_output, fps=30
-        )
-
-        # Verify file was created
-        assert script_path.exists()
-        assert script_path.suffix == ".py"
-        assert script_path.name.startswith("blender_vse_")
-
-        # Verify content
-        content = script_path.read_text()
-        assert "import bpy" in content
-
-        # Clean up
-        script_path.unlink()
 
     def test_read_fps_from_metadata(self, tmp_path):
-        """Test reading FPS from metadata.json."""
-        manager = BlenderProjectManager()
-
-        # Create test metadata file
+        """Test reading FPS from metadata.json file."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_content = {"fps": 60, "canvas_size": [1920, 1080], "sources": {}}
+        metadata_content = '{"fps": 25, "resolution": "1280x720"}'
+        metadata_file.write_text(metadata_content)
 
-        import json
-
-        with open(metadata_file, "w") as f:
-            json.dump(metadata_content, f)
-
-        # Test reading FPS
+        manager = BlenderProjectManager()
         fps = manager._read_fps_from_metadata(metadata_file)
-        assert fps == 60
+
+        assert fps == 25
+
+    def test_read_fps_from_metadata_string_value(self, tmp_path):
+        """Test reading FPS from metadata.json with string value."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_content = '{"fps": "29.97", "resolution": "1280x720"}'
+        metadata_file.write_text(metadata_content)
+
+        manager = BlenderProjectManager()
+        fps = manager._read_fps_from_metadata(metadata_file)
+
+        assert fps == 29
 
     def test_read_fps_from_metadata_default(self, tmp_path):
-        """Test reading FPS with default fallback."""
-        manager = BlenderProjectManager()
-
-        # Create test metadata file without fps
+        """Test reading FPS from metadata.json with missing fps field."""
         metadata_file = tmp_path / "metadata.json"
-        metadata_content = {"canvas_size": [1920, 1080], "sources": {}}
+        metadata_content = '{"resolution": "1280x720"}'
+        metadata_file.write_text(metadata_content)
 
-        import json
-
-        with open(metadata_file, "w") as f:
-            json.dump(metadata_content, f)
-
-        # Test reading FPS (should default to 30)
+        manager = BlenderProjectManager()
         fps = manager._read_fps_from_metadata(metadata_file)
-        assert fps == 30
+
+        assert fps == 30  # Default value
 
     def test_read_fps_from_metadata_invalid_file(self, tmp_path):
-        """Test reading FPS from non-existent file."""
-        manager = BlenderProjectManager()
+        """Test reading FPS from invalid metadata.json file."""
+        metadata_file = tmp_path / "metadata.json"
+        metadata_file.write_text("invalid json content")
 
-        # Test with non-existent file
-        metadata_file = tmp_path / "non_existent.json"
+        manager = BlenderProjectManager()
         fps = manager._read_fps_from_metadata(metadata_file)
-        assert fps == 30
+
+        assert fps == 30  # Default value
+
+    def test_read_fps_from_metadata_nonexistent_file(self, tmp_path):
+        """Test reading FPS from nonexistent metadata.json file."""
+        metadata_file = tmp_path / "nonexistent.json"
+
+        manager = BlenderProjectManager()
+        fps = manager._read_fps_from_metadata(metadata_file)
+
+        assert fps == 30  # Default value
