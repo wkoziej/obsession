@@ -96,8 +96,11 @@ class BlenderProjectManager:
         # 7. Find audio analysis file path if available and requested
         analysis_file_path = None
         if animation_mode != "none":
-            # Get path to analysis file instead of loading the data
-            analysis_file_path = FileStructureManager.get_analysis_file_path(main_audio)
+            # Build analysis file path based on audio file name
+            analysis_dir = FileStructureManager.ensure_analysis_dir(recording_path)
+            analysis_filename = f"{main_audio.stem}_analysis.json"
+            analysis_file_path = analysis_dir / analysis_filename
+
             if analysis_file_path.exists():
                 logger.info(
                     f"Found audio analysis file for animation mode: {animation_mode}"

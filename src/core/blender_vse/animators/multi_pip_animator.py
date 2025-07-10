@@ -7,7 +7,6 @@ from typing import List, Dict
 
 from ..keyframe_helper import KeyframeHelper
 from ..layout_manager import BlenderLayoutManager
-from ..constants import AnimationConstants
 
 
 class MultiPipAnimator:
@@ -71,13 +70,28 @@ class MultiPipAnimator:
             f"✓ Multi-PiP animation: {len(video_strips)} strips, {len(sections)} sections, {len(beats)} beats at {fps} FPS"
         )
 
+        # First: Apply layout positions to ALL strips (like original implementation)
+        layout = self.layout_manager.calculate_multi_pip_layout(len(video_strips))
+        for i, strip in enumerate(video_strips):
+            if i < len(layout):
+                pos_x, pos_y, base_scale = layout[i]
+                if hasattr(strip, "transform"):
+                    strip.transform.offset_x = pos_x
+                    strip.transform.offset_y = pos_y
+                    strip.transform.scale_x = base_scale
+                    strip.transform.scale_y = base_scale
+                    print(
+                        f"  {strip.name}: position ({pos_x}, {pos_y}), scale {base_scale}"
+                    )
+
         # Apply main camera switching based on sections
         if sections:
             self._animate_main_camera_switching(video_strips, sections, fps)
 
-        # Apply PiP corner effects based on beats
-        if beats and len(video_strips) > 1:
-            self._animate_pip_corner_effects(video_strips, beats, fps)
+        # Apply PiP corner effects based on energy peaks (like original)
+        energy_peaks = animation_data["animation_events"].get("energy_peaks", [])
+        if energy_peaks and len(video_strips) > 2:  # Need corner PiPs (index 2+)
+            self._animate_pip_corner_effects(video_strips, energy_peaks, fps)
 
         print("✓ Multi-PiP animation applied successfully")
         return True
@@ -135,60 +149,52 @@ class MultiPipAnimator:
                         )
 
     def _animate_pip_corner_effects(
-        self, video_strips: List, beats: List[float], fps: int
+        self, video_strips: List, energy_peaks: List[float], fps: int
     ):
         """
-        Animate PiP corner effects on beats.
+        Animate PiP corner effects on energy peaks (like original implementation).
 
         Args:
             video_strips: List of video strips
-            beats: List of beat times in seconds
+            energy_peaks: List of energy peak times in seconds
             fps: Frames per second
         """
-        print(f"  PiP corner effects on {len(beats)} beats")
+        print(f"  PiP corner effects on {len(energy_peaks)} energy peaks")
 
-        # Get corner positions from layout manager
-        corner_positions = self.layout_manager.get_corner_positions(
-            AnimationConstants.PIP_MARGIN
-        )
+        # Set up PiP strips (non-main cameras) - positions already set above
+        pip_strips = video_strips[2:]  # Corner PiPs start from index 2 (like original)
 
-        # Set up PiP strips (non-main cameras)
-        pip_strips = video_strips[1:4]  # Up to 3 PiP strips
+        # Make all corner PiPs visible and set initial keyframes
+        for strip in pip_strips:
+            if hasattr(strip, "transform"):
+                strip.blend_alpha = 1.0
+                # Set initial scale keyframes at frame 1
+                self.keyframe_helper.insert_transform_scale_keyframes(strip.name, 1)
+                print(f"    PiP strip {strip.name}: visible with initial keyframes")
 
-        # Position PiP strips in corners
-        for i, strip in enumerate(pip_strips):
-            if i < len(corner_positions):
-                # Set PiP scale
-                if hasattr(strip, "transform"):
-                    strip.transform.scale_x = AnimationConstants.PIP_SCALE_FACTOR
-                    strip.transform.scale_y = AnimationConstants.PIP_SCALE_FACTOR
-                    self.keyframe_helper.insert_transform_scale_keyframes(
-                        strip.name, 1, AnimationConstants.PIP_SCALE_FACTOR
-                    )
+        # Apply energy peak effects to all PiP strips (like original)
+        for peak_index, peak_time in enumerate(energy_peaks):
+            frame = int(peak_time * fps)
 
-        # Apply beat effects to PiP strips
-        for beat_index, beat_time in enumerate(beats):
-            frame = int(beat_time * fps)
-
-            # Cycle through PiP strips for beat effects
-            for i, strip in enumerate(pip_strips):
+            for strip in pip_strips:
                 if not hasattr(strip, "transform"):
                     continue
 
-                # Apply slight scale pulse effect on beats
-                if beat_index % len(pip_strips) == i:
-                    # This PiP gets a slight scale boost
-                    enhanced_scale = AnimationConstants.PIP_SCALE_FACTOR * 1.1
-                    strip.transform.scale_x = enhanced_scale
-                    strip.transform.scale_y = enhanced_scale
-                    self.keyframe_helper.insert_transform_scale_keyframes(
-                        strip.name, frame, enhanced_scale
-                    )
+                # Get current base scale and apply 10% pulse (like original)
+                current_scale = strip.transform.scale_x
+                pulse_scale = current_scale * 1.1  # 10% pulse for corner PiPs
 
-                    # Return to normal scale after 1 frame
-                    return_frame = frame + 1
-                    strip.transform.scale_x = AnimationConstants.PIP_SCALE_FACTOR
-                    strip.transform.scale_y = AnimationConstants.PIP_SCALE_FACTOR
-                    self.keyframe_helper.insert_transform_scale_keyframes(
-                        strip.name, return_frame, AnimationConstants.PIP_SCALE_FACTOR
-                    )
+                # Scale up on energy peak
+                strip.transform.scale_x = pulse_scale
+                strip.transform.scale_y = pulse_scale
+                self.keyframe_helper.insert_transform_scale_keyframes(
+                    strip.name, frame, pulse_scale
+                )
+
+                # Scale back down (1 frame later)
+                return_frame = frame + 1
+                strip.transform.scale_x = current_scale
+                strip.transform.scale_y = current_scale
+                self.keyframe_helper.insert_transform_scale_keyframes(
+                    strip.name, return_frame, current_scale
+                )
