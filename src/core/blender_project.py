@@ -205,11 +205,14 @@ class BlenderProjectManager:
         env.update(env_vars)
 
         try:
+            logger.debug(f"Executing command: {' '.join(cmd)}")
+            logger.debug(f"Working directory: {os.getcwd()}")
             result = subprocess.run(
                 cmd, env=env, capture_output=True, text=True, check=True
             )
             logger.info("Blender script executed successfully")
-            logger.debug(f"Blender output: {result.stdout}")
+            logger.debug(f"Blender stdout: {result.stdout}")
+            logger.debug(f"Blender stderr: {result.stderr}")
         except subprocess.CalledProcessError as e:
             logger.error(f"Blender execution failed with return code {e.returncode}")
             logger.error(f"Blender stdout: {e.stdout}")

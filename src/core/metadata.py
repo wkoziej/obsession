@@ -7,7 +7,7 @@ import time
 from typing import Dict, List, Tuple, Any
 
 try:
-    import obs
+    import obspython as obs
 except ImportError:
     # Mock for testing
     obs = None

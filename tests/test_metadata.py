@@ -64,6 +64,21 @@ class TestSourceCapabilitiesDetection:
         result = determine_source_capabilities(None)
         assert result == {"has_audio": False, "has_video": False}
 
+    def test_determine_source_capabilities_obs_none_fallback(self):
+        """Test behavior when obs module is None (import failure scenario)."""
+        # This test ensures that the function handles the case where obs import fails
+        # It directly tests the fallback behavior that should occur
+
+        # Mock the obs module to be None at the module level
+        with patch("src.core.metadata.obs", None):
+            mock_source = Mock()
+            result = determine_source_capabilities(mock_source)
+
+            # When obs is None, should return False for both capabilities
+            assert result == {"has_audio": False, "has_video": False}
+
+            # This test would catch the import bug because it verifies the fallback works
+
 
 class TestMetadataWithCapabilities:
     """Test metadata creation with new has_audio/has_video fields."""

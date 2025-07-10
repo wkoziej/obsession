@@ -196,10 +196,33 @@ class BlenderVSEConfigurator:
                 try:
                     # Upewnij się, że katalog istnieje
                     self.output_blend.parent.mkdir(parents=True, exist_ok=True)
-                    bpy.ops.wm.save_as_mainfile(filepath=str(self.output_blend))
-                    print(f"✓ Zapisano projekt: {self.output_blend}")
+                    print(f"DEBUG: Attempting to save to: {self.output_blend}")
+                    print(
+                        f"DEBUG: Directory exists: {self.output_blend.parent.exists()}"
+                    )
+
+                    result = bpy.ops.wm.save_as_mainfile(
+                        filepath=str(self.output_blend)
+                    )
+                    print(f"DEBUG: Save operation result: {result}")
+
+                    # Check if file was actually created
+                    if self.output_blend.exists():
+                        print(f"✓ Zapisano projekt: {self.output_blend}")
+                        print(
+                            f"DEBUG: File size: {self.output_blend.stat().st_size} bytes"
+                        )
+                    else:
+                        print(
+                            f"✗ Plik nie został utworzony mimo braku błędów: {self.output_blend}"
+                        )
+                        return False
+
                 except Exception as e:
                     print(f"✗ Błąd zapisywania projektu: {e}")
+                    import traceback
+
+                    traceback.print_exc()
                     return False
 
             # 9. Apply animations if requested
