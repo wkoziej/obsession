@@ -68,7 +68,7 @@ class BlenderLayoutManager:
         layout = []
 
         # PiP settings
-        pip_scale = 0.25
+        pip_scale = AnimationConstants.PIP_SCALE_FACTOR
         corner_positions = self.get_corner_positions()
 
         for i in range(strip_count):

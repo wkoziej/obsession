@@ -18,7 +18,7 @@
     class AnimationConstants:
         ENERGY_SCALE_FACTOR = 1.2
         PIP_SCALE_FACTOR = 1.1
-        PIP_MARGIN = 160
+        PIP_MARGIN = 120
 
     # src/core/blender_vse/config.py
     class BlenderVSEConfig:
