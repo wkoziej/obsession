@@ -91,6 +91,11 @@ class BlenderProjectSetup:
             render.ffmpeg.codec = "H264"
             render.ffmpeg.constant_rate_factor = "HIGH"
 
+            # Configure audio settings
+            render.ffmpeg.audio_codec = "AAC"
+            render.ffmpeg.audio_bitrate = 192
+            render.ffmpeg.audio_mixrate = 48000
+
             # Set output path if provided
             render_output = self.config.get("render_output")
             if render_output:

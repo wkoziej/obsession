@@ -76,77 +76,94 @@ class MultiPipAnimator:
             if i < len(layout):
                 pos_x, pos_y, base_scale = layout[i]
                 if hasattr(strip, "transform"):
+                    # Calculate resolution-aware scale
+                    adjusted_scale = self._calculate_resolution_aware_scale(
+                        strip, base_scale
+                    )
+
                     strip.transform.offset_x = pos_x
                     strip.transform.offset_y = pos_y
-                    strip.transform.scale_x = base_scale
-                    strip.transform.scale_y = base_scale
+                    strip.transform.scale_x = adjusted_scale
+                    strip.transform.scale_y = adjusted_scale
                     print(
-                        f"  {strip.name}: position ({pos_x}, {pos_y}), scale {base_scale}"
+                        f"  {strip.name}: position ({pos_x}, {pos_y}), base_scale {base_scale}, adjusted_scale {adjusted_scale:.3f}"
                     )
+
+        # Separate main cameras from corner PiPs (like original implementation)
+        main_cameras = {}
+        corner_pips = {}
+
+        for i, strip in enumerate(video_strips):
+            if i < 2:  # First two strips are main cameras
+                main_cameras[strip.name] = strip
+            else:  # Rest are corner PiPs
+                corner_pips[strip.name] = strip
+
+        print(f"Main cameras: {list(main_cameras.keys())}")
+        print(f"Corner PiPs: {list(corner_pips.keys())}")
 
         # Apply main camera switching based on sections
         if sections:
-            self._animate_main_camera_switching(video_strips, sections, fps)
+            self._setup_main_camera_sections(main_cameras, sections, fps)
 
-        # Apply PiP corner effects based on energy peaks (like original)
+        # Apply corner PiP effects based on energy peaks (like original)
         energy_peaks = animation_data["animation_events"].get("energy_peaks", [])
-        if energy_peaks and len(video_strips) > 2:  # Need corner PiPs (index 2+)
-            self._animate_pip_corner_effects(video_strips, energy_peaks, fps)
+        if energy_peaks and corner_pips:
+            self._setup_corner_pip_effects(corner_pips, energy_peaks, fps)
 
         print("✓ Multi-PiP animation applied successfully")
         return True
 
-    def _animate_main_camera_switching(
-        self, video_strips: List, sections: List[Dict], fps: int
+    def _setup_main_camera_sections(
+        self, main_cameras: Dict, sections: List[Dict], fps: int
     ):
         """
-        Animate main camera switching on section boundaries.
+        Setup main camera section switching (restored original logic).
+
+        Main cameras (video1/video2) alternate on section boundaries.
 
         Args:
-            video_strips: List of video strips
+            main_cameras: Dictionary of main camera strips
             sections: List of section dictionaries with start/end times
             fps: Frames per second
         """
-        print(f"  Main camera switching on {len(sections)} sections")
+        print("=== Setting up main camera section switching ===")
 
-        # Set initial main camera (first strip visible)
-        for i, strip in enumerate(video_strips):
-            alpha_value = 1.0 if i == 0 else 0.0
-            strip.blend_alpha = alpha_value
-            self.keyframe_helper.insert_blend_alpha_keyframe(strip.name, 1, alpha_value)
+        strip_names = list(main_cameras.keys())
+        if len(strip_names) < 2:
+            print("✗ Need at least 2 main cameras for section switching")
+            return False
 
-        # Switch main camera on section boundaries
+        # Initially hide all main cameras
+        for strip in main_cameras.values():
+            strip.blend_alpha = 0.0
+
+        # Setup section switching (alternating between video1 and video2)
         for section_index, section in enumerate(sections):
-            if section_index == 0:
-                continue  # Skip first section (already set initial state)
+            start_frame = int(section["start"] * fps)
+            end_frame = int(section["end"] * fps)
 
-            frame = int(section["start"] * fps)
-            active_strip_index = section_index % len(video_strips)
+            # Determine which camera should be active
+            active_index = section_index % len(strip_names)
+            active_strip_name = strip_names[active_index]
+            active_strip = main_cameras[active_strip_name]
 
             print(
-                f"    Section {section_index}: frame {frame}, main camera {active_strip_index}"
+                f"  Section {section_index + 1} ({section['label']}): frames {start_frame}-{end_frame}, camera {active_strip_name}"
             )
 
-            # Set main camera visibility
-            for strip_index, strip in enumerate(video_strips):
-                if strip_index == active_strip_index:
-                    # Main camera: full visibility
-                    strip.blend_alpha = 1.0
-                    self.keyframe_helper.insert_blend_alpha_keyframe(
-                        strip.name, frame, 1.0
-                    )
-                else:
-                    # Other cameras: check if they should be PiP
-                    if strip_index < 4:  # Up to 4 strips total (1 main + 3 PiPs)
-                        strip.blend_alpha = 0.3  # PiP visibility
-                        self.keyframe_helper.insert_blend_alpha_keyframe(
-                            strip.name, frame, 0.3
-                        )
-                    else:
-                        strip.blend_alpha = 0.0  # Hidden
-                        self.keyframe_helper.insert_blend_alpha_keyframe(
-                            strip.name, frame, 0.0
-                        )
+            # Hide all cameras at section start
+            for strip in main_cameras.values():
+                strip.blend_alpha = 0.0
+                self.keyframe_helper.insert_blend_alpha_keyframe(
+                    strip.name, start_frame, 0.0
+                )
+
+            # Show active camera
+            active_strip.blend_alpha = 1.0
+            self.keyframe_helper.insert_blend_alpha_keyframe(
+                active_strip.name, start_frame, 1.0
+            )
 
     def _animate_pip_corner_effects(
         self, video_strips: List, energy_peaks: List[float], fps: int
@@ -172,15 +189,94 @@ class MultiPipAnimator:
                 self.keyframe_helper.insert_transform_scale_keyframes(strip.name, 1)
                 print(f"    PiP strip {strip.name}: visible with initial keyframes")
 
-        # Apply energy peak effects to all PiP strips (like original)
+    def _calculate_resolution_aware_scale(self, strip, base_scale: float) -> float:
+        """
+        Calculate resolution-aware scale factor for video strip.
+
+        This adjusts the base scale to account for the difference between
+        the strip's resolution and the project's resolution.
+
+        Args:
+            strip: Blender video strip object
+            base_scale: Base scale factor from layout calculation
+
+        Returns:
+            float: Adjusted scale factor
+        """
+        try:
+            # Get scene resolution
+            import bpy
+
+            scene = bpy.context.scene
+            project_width = scene.render.resolution_x
+            project_height = scene.render.resolution_y
+
+            # Get strip resolution from elements (if available)
+            if hasattr(strip, "elements") and strip.elements:
+                # For movie strips, get resolution from first element
+                strip_width = strip.elements[0].orig_width
+                strip_height = strip.elements[0].orig_height
+            else:
+                # Fallback: use project resolution
+                return base_scale
+
+            # Calculate scale factors to fit strip to project resolution
+            width_scale = project_width / strip_width
+            height_scale = project_height / strip_height
+
+            # Use the smaller scale to maintain aspect ratio (fit within bounds)
+            fit_scale = min(width_scale, height_scale)
+
+            # Apply the fit scale to the base layout scale
+            adjusted_scale = base_scale * fit_scale
+
+            print(
+                f"    Resolution adjustment: {strip_width}x{strip_height} -> {project_width}x{project_height}, "
+                f"fit_scale: {fit_scale:.3f}, base: {base_scale}, adjusted: {adjusted_scale:.3f}"
+            )
+
+            return adjusted_scale
+
+        except Exception as e:
+            print(
+                f"    Warning: Could not calculate resolution-aware scale for {strip.name}: {e}"
+            )
+            return base_scale
+
+    def _setup_corner_pip_effects(
+        self, corner_pips: Dict, energy_peaks: List[float], fps: int
+    ):
+        """
+        Setup corner PiP effects (restored original logic).
+
+        Corner PiPs are always visible (blend_alpha = 1.0) and react to energy peaks.
+
+        Args:
+            corner_pips: Dictionary of corner PiP strips
+            energy_peaks: List of energy peak times in seconds
+            fps: Frames per second
+        """
+        print("=== Setting up corner PiP effects ===")
+
+        if not corner_pips:
+            print("✓ No corner PiPs to animate")
+            return True
+
+        # Make all corner PiPs FULLY VISIBLE (original logic)
+        for strip in corner_pips.values():
+            strip.blend_alpha = 1.0  # FULL VISIBILITY (not 0.3!)
+
+        # Add beat-based scale pulsing (like energy-pulse mode)
+        for strip in corner_pips.values():
+            # Set initial scale keyframes at frame 1
+            self.keyframe_helper.insert_transform_scale_keyframes(strip.name, 1)
+
+        # Animate on energy peaks (bass response)
         for peak_index, peak_time in enumerate(energy_peaks):
             frame = int(peak_time * fps)
 
-            for strip in pip_strips:
-                if not hasattr(strip, "transform"):
-                    continue
-
-                # Get current base scale and apply 10% pulse (like original)
+            for strip in corner_pips.values():
+                # Get current base scale from layout
                 current_scale = strip.transform.scale_x
                 pulse_scale = current_scale * 1.1  # 10% pulse for corner PiPs
 
@@ -198,3 +294,6 @@ class MultiPipAnimator:
                 self.keyframe_helper.insert_transform_scale_keyframes(
                     strip.name, return_frame, current_scale
                 )
+
+        print(f"✓ Corner PiP effects applied to {len(corner_pips)} strips")
+        return True
