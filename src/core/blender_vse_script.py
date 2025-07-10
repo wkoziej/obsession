@@ -31,41 +31,35 @@ import json
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict
 
+# Import refactored modules
+try:
+    from .blender_vse.config import BlenderVSEConfig
+    from .blender_vse.constants import AnimationConstants
+except ImportError:
+    # Fallback for when script is run standalone in Blender
+    sys.path.append(str(Path(__file__).parent))
+    from blender_vse.config import BlenderVSEConfig
+    from blender_vse.constants import AnimationConstants
+
 
 class BlenderVSEConfigurator:
     """Konfigurator Blender VSE z parametrami."""
 
     def __init__(self):
         """Inicjalizuj konfigurator z parametrami z zmiennych środowiskowych."""
-        self.video_files = self._parse_video_files()
-        self.main_audio = self._get_env_path("BLENDER_VSE_MAIN_AUDIO")
-        self.output_blend = self._get_env_path("BLENDER_VSE_OUTPUT_BLEND")
-        self.render_output = self._get_env_path("BLENDER_VSE_RENDER_OUTPUT")
-        self.fps = int(float(os.getenv("BLENDER_VSE_FPS", "30")))
-        self.resolution_x = int(os.getenv("BLENDER_VSE_RESOLUTION_X", "1280"))
-        self.resolution_y = int(os.getenv("BLENDER_VSE_RESOLUTION_Y", "720"))
+        # Use new config module for parameter parsing
+        config = BlenderVSEConfig()
 
-        # Animation parameters
-        self.animation_mode = os.getenv("BLENDER_VSE_ANIMATION_MODE", "none")
-        self.beat_division = int(os.getenv("BLENDER_VSE_BEAT_DIVISION", "8"))
-
-    def _parse_video_files(self) -> List[Path]:
-        """Parsuj listę plików wideo z zmiennej środowiskowej."""
-        video_files_str = os.getenv("BLENDER_VSE_VIDEO_FILES", "")
-        if not video_files_str:
-            return []
-
-        paths = []
-        for path_str in video_files_str.split(","):
-            path_str = path_str.strip()
-            if path_str:
-                paths.append(Path(path_str))
-        return paths
-
-    def _get_env_path(self, env_var: str) -> Optional[Path]:
-        """Pobierz ścieżkę ze zmiennej środowiskowej."""
-        path_str = os.getenv(env_var)
-        return Path(path_str) if path_str else None
+        # Set attributes from config (maintaining compatibility)
+        self.video_files = config.video_files
+        self.main_audio = config.main_audio
+        self.output_blend = config.output_blend
+        self.render_output = config.render_output
+        self.fps = config.fps
+        self.resolution_x = config.resolution_x
+        self.resolution_y = config.resolution_y
+        self.animation_mode = config.animation_mode
+        self.beat_division = config.beat_division
 
     def validate_parameters(self) -> Tuple[bool, List[str]]:
         """
@@ -74,33 +68,9 @@ class BlenderVSEConfigurator:
         Returns:
             Tuple[bool, List[str]]: (czy_valid, lista_błędów)
         """
-        errors = []
-
-        if not self.video_files:
-            errors.append("Brak plików wideo (BLENDER_VSE_VIDEO_FILES)")
-
-        for i, video_file in enumerate(self.video_files):
-            if not video_file.exists():
-                errors.append(f"Plik wideo {i + 1} nie istnieje: {video_file}")
-
-        if self.main_audio and not self.main_audio.exists():
-            errors.append(f"Główny plik audio nie istnieje: {self.main_audio}")
-
-        if not self.output_blend:
-            errors.append("Brak ścieżki wyjściowej .blend (BLENDER_VSE_OUTPUT_BLEND)")
-
-        if not self.render_output:
-            errors.append("Brak ścieżki renderowania (BLENDER_VSE_RENDER_OUTPUT)")
-
-        if self.fps <= 0:
-            errors.append(f"Nieprawidłowa wartość FPS: {self.fps}")
-
-        if self.resolution_x <= 0 or self.resolution_y <= 0:
-            errors.append(
-                f"Nieprawidłowa rozdzielczość: {self.resolution_x}x{self.resolution_y}"
-            )
-
-        return len(errors) == 0, errors
+        # Use config module for validation (maintaining compatibility)
+        config = BlenderVSEConfig()
+        return config.validate()
 
     def setup_vse_project(self) -> bool:
         """
@@ -539,8 +509,10 @@ class BlenderVSEConfigurator:
             # Scale up on energy peak
             for strip in video_strips:
                 if hasattr(strip, "transform"):
-                    strip.transform.scale_x = 1.2  # Scale up by 20%
-                    strip.transform.scale_y = 1.2
+                    strip.transform.scale_x = (
+                        AnimationConstants.ENERGY_SCALE_FACTOR
+                    )  # Scale up by 20%
+                    strip.transform.scale_y = AnimationConstants.ENERGY_SCALE_FACTOR
 
                     # Insert keyframe at peak frame using scene keyframe_insert
                     data_path_x = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
@@ -664,7 +636,7 @@ class BlenderVSEConfigurator:
 
         # PiP settings
         pip_scale = 0.25
-        pip_margin = 160  # Distance from edge
+        pip_margin = AnimationConstants.PIP_MARGIN  # Distance from edge
 
         # Calculate corner positions relative to center (0,0)
         # For 1280x720: half_width=640, half_height=360
@@ -813,7 +785,9 @@ class BlenderVSEConfigurator:
             for strip in corner_pips.values():
                 # Get current base scale from layout
                 current_scale = strip.transform.scale_x
-                pulse_scale = current_scale * 1.1  # 10% pulse for corner PiPs
+                pulse_scale = (
+                    current_scale * AnimationConstants.PIP_SCALE_FACTOR
+                )  # 10% pulse for corner PiPs
 
                 # Scale up on energy peak
                 strip.transform.scale_x = pulse_scale
