@@ -7,6 +7,7 @@ from typing import List, Dict
 
 from ..keyframe_helper import KeyframeHelper
 from ..layout_manager import BlenderLayoutManager
+from ..effects.vintage_film_effects import VintageFilmEffects
 
 
 class MultiPipAnimator:
@@ -16,6 +17,7 @@ class MultiPipAnimator:
         """Initialize MultiPipAnimator with required components."""
         self.keyframe_helper = KeyframeHelper()
         self.layout_manager = BlenderLayoutManager()
+        self.vintage_effects = VintageFilmEffects()
 
     def get_animation_mode(self) -> str:
         """
@@ -105,6 +107,11 @@ class MultiPipAnimator:
         # Apply main camera switching based on sections
         if sections:
             self._setup_main_camera_sections(main_cameras, sections, fps)
+
+        # Apply vintage film effects to main cameras
+        beats = animation_data["animation_events"].get("beats", [])
+        if beats and main_cameras:
+            self._apply_vintage_effects_to_main_cameras(main_cameras, beats, fps)
 
         # Apply corner PiP effects based on energy peaks (like original)
         energy_peaks = animation_data["animation_events"].get("energy_peaks", [])
@@ -297,3 +304,46 @@ class MultiPipAnimator:
 
         print(f"✓ Corner PiP effects applied to {len(corner_pips)} strips")
         return True
+
+    def _apply_vintage_effects_to_main_cameras(
+        self, main_cameras: Dict, beats: List[float], fps: int
+    ) -> bool:
+        """
+        Apply vintage film effects to main cameras.
+
+        Args:
+            main_cameras: Dictionary of main camera strips
+            beats: List of beat times in seconds
+            fps: Frames per second
+
+        Returns:
+            bool: True if effects were applied successfully
+        """
+        print("=== Applying vintage film effects to main cameras ===")
+
+        # Calculate timeline duration for jitter effect
+        import bpy
+
+        timeline_duration = bpy.context.scene.frame_end
+
+        # Vintage effects configuration (subtle for main cameras)
+        vintage_config = {
+            "camera_shake": {"enabled": True, "intensity": 6.0},
+            "film_jitter": {"enabled": True, "intensity": 1.0},
+            "brightness_flicker": {"enabled": True, "amount": 0.08},
+            "rotation_wobble": {"enabled": True, "degrees": 0.5},
+        }
+
+        success = True
+        for strip in main_cameras.values():
+            print(f"  Applying vintage effects to main camera: {strip.name}")
+            success &= self.vintage_effects.apply_vintage_film_combo(
+                strip, beats, timeline_duration, fps, vintage_config
+            )
+
+        if success:
+            print(f"✓ Vintage film effects applied to {len(main_cameras)} main cameras")
+        else:
+            print("✗ Some vintage effects failed for main cameras")
+
+        return success

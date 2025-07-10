@@ -157,3 +157,57 @@ class KeyframeHelper:
             raise ValueError("Strip name cannot be empty or None")
 
         return f'sequence_editor.sequences_all["{strip_name}"].{property_path}'
+
+    def insert_transform_position_keyframes(
+        self,
+        strip: Union[str, object],
+        frame: int,
+        offset_x: int = None,
+        offset_y: int = None,
+    ) -> bool:
+        """
+        Insert transform position keyframes (alias for insert_transform_offset_keyframes).
+
+        Args:
+            strip: Strip name (str) or strip object with .name attribute
+            frame: Frame number for keyframe
+            offset_x: Offset X value. If None, uses strip's current value
+            offset_y: Offset Y value. If None, uses strip's current value
+
+        Returns:
+            bool: True if keyframes inserted successfully
+        """
+        return self.insert_transform_offset_keyframes(strip, frame, offset_x, offset_y)
+
+    def insert_transform_rotation_keyframe(
+        self, strip: Union[str, object], frame: int, rotation: float = None
+    ) -> bool:
+        """
+        Insert transform.rotation keyframe for a strip.
+
+        Args:
+            strip: Strip name (str) or strip object with .name attribute
+            frame: Frame number for keyframe
+            rotation: Rotation value in radians. If None, uses strip's current value
+
+        Returns:
+            bool: True if keyframe inserted successfully
+        """
+        try:
+            # Extract strip name and rotation value
+            if isinstance(strip, str):
+                strip_name = strip
+                if rotation is None:
+                    rotation = 0.0  # Default rotation
+            else:
+                strip_name = strip.name
+                if rotation is None:
+                    rotation = strip.transform.rotation
+
+            # Build data path and insert keyframe
+            data_path = self.build_data_path(strip_name, "transform.rotation")
+            bpy.context.scene.keyframe_insert(data_path=data_path, frame=frame)
+            return True
+
+        except Exception:
+            return False
