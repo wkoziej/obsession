@@ -6,6 +6,7 @@ Using shared OBS fixtures from conftest.py to avoid duplication.
 import json
 import os
 import tempfile
+import importlib
 from unittest.mock import Mock, patch
 
 # Import our module - obspython mock is handled by conftest.py
@@ -22,6 +23,16 @@ from src.obs_integration.obs_script import (
 
 class TestOBSScript:
     """Test cases for OBS script functionality."""
+
+    def setup_method(self):
+        """Reset module state before each test."""
+        import src.obs_integration.obs_script
+
+        importlib.reload(src.obs_integration.obs_script)
+        # Also reset any other modules that might have global state
+        import src.core.metadata
+
+        importlib.reload(src.core.metadata)
 
     def test_script_description(self):
         """Test script description returns proper HTML."""
