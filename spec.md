@@ -22,7 +22,7 @@ Zademonstrowanie możliwości automatycznego tworzenia animacji PiP (Picture-in-
 1. **Beat Switch Mode** - przełączanie aktywnego PiP co N bitów
 2. **Energy Pulse Mode** - pulsowanie rozmiaru PiP w rytm basu
 3. **Section Transition Mode** - płynne przejścia na granicach sekcji
-4. **Multi-PiP Mode** - wszystkie PiP widoczne, różne efekty dla każdego
+4. **Multi-PiP Mode** - główne kamery (video1/video2) przełączają się co sekcję, pozostałe PiP w rogach z efektami
 
 ## 3. Wymagania techniczne
 
@@ -72,9 +72,9 @@ Zademonstrowanie możliwości automatycznego tworzenia animacji PiP (Picture-in-
 ## 5. Przypadki użycia
 
 ### UC1: Automatyczna animacja koncertu
-- Wejście: nagranie z 3 kamer + główny audio
+- Wejście: nagranie z 4 kamer + główny audio
 - Proces: analiza audio → generowanie eventów → animacje PiP
-- Wyjście: dynamiczny montaż z przełączaniem kamer w rytm
+- Wyjście: dynamiczny montaż z główne kamery co sekcję + PiP w rogach z efektami
 
 
 ## 6. Interfejs użytkownika
@@ -88,7 +88,7 @@ python -m cli.analyze_audio recording_20250105_143022/extracted/main_audio.m4a .
 python -m cli.blend_setup recording_20250105_143022 --analyze-audio --animation-mode beat-switch
 
 # Wybór trybu animacji i beat division
-python -m cli.blend_setup recording_20250105_143022 --animation-mode energy-pulse --beat-division 4
+python -m cli.blend_setup recording_20250105_143022 --animation-mode multi-pip --beat-division 4
 ```
 
 ### 6.2 Parametry w Blenderze

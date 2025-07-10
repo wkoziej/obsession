@@ -11,13 +11,15 @@ OBS Canvas Recorder is a comprehensive system for automatic extraction of source
 ### Core Components
 - **`src/core/metadata.py`**: Handles metadata creation and OBS API integration for source capabilities detection
 - **`src/core/extractor.py`**: FFmpeg-based video/audio extraction with crop parameter calculation
-- **`src/core/file_structure.py`**: Manages organized file structure for recordings (metadata.json, extracted/, blender/)
+- **`src/core/file_structure.py`**: Manages organized file structure for recordings (metadata.json, extracted/, blender/, analysis/)
 - **`src/core/blender_project.py`**: Creates Blender VSE projects from extracted recordings using parametric scripts
 - **`src/core/audio_validator.py`**: Validates and selects main audio files for projects
-- **`src/core/blender_vse_script.py`**: Parametric Blender script for VSE project creation
+- **`src/core/audio_analyzer.py`**: Audio analysis for animation events (beats, energy peaks, sections)
+- **`src/core/blender_vse_script.py`**: Parametric Blender script for VSE project creation with audio-driven animations
 - **`src/obs_integration/obs_script.py`**: OBS Studio script that collects scene metadata and auto-organizes files
 - **`src/cli/extract.py`**: Command-line interface for source extraction
-- **`src/cli/blend_setup.py`**: CLI for creating Blender VSE projects from recordings
+- **`src/cli/blend_setup.py`**: CLI for creating Blender VSE projects from recordings with automatic audio analysis
+- **`src/cli/analyze_audio.py`**: CLI for standalone audio analysis
 - **`src/cli/cameras.py`**: CLI for managing multiple camera setup with RPi cameras
 
 ### Data Flow
@@ -25,8 +27,9 @@ OBS Canvas Recorder is a comprehensive system for automatic extraction of source
 2. Files are automatically organized into structured directories using FileStructureManager
 3. Metadata includes source positions, dimensions, and capabilities (audio/video flags)
 4. CLI tool uses metadata to extract individual sources via FFmpeg to extracted/ directory
-5. Blender VSE projects can be created from extracted files with automatic main audio detection
-6. Final structure: recording_name/[video_file, metadata.json, extracted/, blender/]
+5. Audio analysis automatically performed when creating animated Blender projects (analysis/ directory)
+6. Blender VSE projects created from extracted files with audio-driven animations and automatic main audio detection
+7. Final structure: recording_name/[video_file, metadata.json, extracted/, analysis/, blender/]
 
 ## Development Commands
 
@@ -85,6 +88,14 @@ uv run python -m cli.blend_setup ./recording_20250105_143022
 # With specific main audio file
 uv run python -m cli.blend_setup ./recording_20250105_143022 --main-audio "main_audio.m4a"
 
+# Create animated VSE project (automatic audio analysis)
+uv run python -m cli.blend_setup ./recording_20250105_143022 --animation-mode beat-switch
+uv run python -m cli.blend_setup ./recording_20250105_143022 --animation-mode energy-pulse 
+uv run python -m cli.blend_setup ./recording_20250105_143022 --animation-mode multi-pip
+
+# Standalone audio analysis (optional - done automatically when needed)
+uv run python -m cli.analyze_audio ./extracted/main_audio.m4a ./analysis --beat-division 8
+
 # Manage camera setup (RPi cameras)
 uv run python -m cli.cameras --help
 ```
@@ -136,14 +147,27 @@ The `obs_script.py` must be loaded in OBS Studio (Tools → Scripts → Add). It
 The system includes comprehensive Blender VSE project generation:
 - **Parametric script approach**: Environment variables control project creation
 - **Automatic main audio detection**: Uses AudioValidator to select primary audio track
+- **Audio-driven animations**: Automatic audio analysis for beat-synchronized effects
 - **FPS detection**: Reads frame rate from recording metadata
 - **Snap support**: Works with snap-installed Blender
 - **Render configuration**: Sets up output paths and resolution
-- **VSE timeline setup**: Automatically arranges video and audio tracks
+- **VSE timeline setup**: Automatically arranges video and audio tracks with keyframe animations
+
+## Audio-Driven Animations
+
+The system includes sophisticated audio analysis and animation capabilities:
+- **AudioAnalyzer**: Uses librosa for beat detection, energy analysis, and structural segmentation
+- **Animation Modes**:
+  - `beat-switch`: Round-robin video switching synchronized to beats
+  - `energy-pulse`: Scale pulsing on energy peaks (bass response)
+  - `multi-pip`: Main cameras switch on section boundaries + corner PiPs with beat effects
+- **Automatic Analysis**: Audio analysis triggered automatically when animation modes are used
+- **Cache-Aware**: Reuses existing analysis files, no duplicate processing
+- **Data Exchange**: JSON format for animation events (beats, energy_peaks, sections)
 
 ## Dependencies
 
-- **Runtime**: `ffmpeg-python`, `pathlib-extensions`
+- **Runtime**: `ffmpeg-python`, `pathlib-extensions`, `librosa`, `numpy`, `scipy`
 - **Development**: `pytest`, `pytest-cov`, `black`, `mypy`, `flake8`, `pre-commit`
 - **External**: 
   - FFmpeg 4.4+ must be available in PATH
@@ -160,6 +184,8 @@ recording_name/
 │   ├── source1.mp4
 │   ├── source2.m4a
 │   └── ...
+├── analysis/               # Audio analysis for animations
+│   └── main_audio_analysis.json
 └── blender/               # Blender VSE projects
     ├── recording_name.blend
     └── render/

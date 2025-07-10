@@ -73,10 +73,16 @@
 - [ ] Implementacja: energy_pulse mode z energy_peaks events
 - [ ] Integracja z istniejącym MVP system
 
-### 3B.2 Pozostałe tryby animacji
-- [ ] animate_section_transitions() - płynne przejścia na sections
-- [ ] animate_multi_pip() - wszystkie PiP widoczne z różnymi efektami
+### 3B.2 Multi-PiP Mode Implementation
+- [ ] animate_multi_pip() - main cameras (video1/video2) section-based switching + corner PiP effects
+- [ ] _setup_main_camera_sections() - blend_alpha switching on section boundaries
+- [ ] _setup_corner_pip_effects() - position + scale animations for remaining strips
+- [ ] Integration with sections data from audio analysis
+
+### 3B.3 Advanced animation features
+- [ ] animate_section_transitions() - smooth transitions between sections
 - [ ] Advanced keyframe helpers i easing functions
+- [ ] Kombinacja animacji (multi-pip + energy-pulse for corner PiPs)
 
 ## Faza 4: Demonstracja i dokumentacja
 

@@ -191,6 +191,33 @@ def find_main_audio_file(recording_dir: Path) -> Path:
     return audio_files[0]
 
 
+def _has_existing_audio_analysis(recording_dir: Path, main_audio: str = None) -> bool:
+    """
+    Check if audio analysis already exists for the recording.
+
+    Args:
+        recording_dir: Path to recording directory
+        main_audio: Main audio filename (optional)
+
+    Returns:
+        bool: True if analysis exists
+    """
+    try:
+        # Find main audio file if not specified
+        if not main_audio:
+            main_audio_file = find_main_audio_file(recording_dir)
+        else:
+            main_audio_file = recording_dir / "extracted" / main_audio
+
+        # Check if analysis file exists using correct API
+        analysis_file = FileStructureManager.find_audio_analysis(main_audio_file)
+        return analysis_file is not None
+
+    except Exception:
+        # If any error occurs, assume no analysis exists
+        return False
+
+
 def perform_audio_analysis(recording_dir: Path, main_audio: Path) -> Path:
     """
     Perform audio analysis on main audio file.
@@ -239,9 +266,20 @@ def main() -> int:
         # Validate animation parameters
         validate_animation_parameters(args.animation_mode, args.beat_division)
 
-        # Perform audio analysis if requested
-        if args.analyze_audio:
-            logger.info("Audio analysis requested...")
+        # Determine if audio analysis is needed
+        needs_audio_analysis = args.analyze_audio or (
+            args.animation_mode != "none"
+            and not _has_existing_audio_analysis(args.recording_dir, args.main_audio)
+        )
+
+        # Perform audio analysis if requested or automatically needed
+        if needs_audio_analysis:
+            if args.analyze_audio:
+                logger.info("Audio analysis requested...")
+            else:
+                logger.info(
+                    f"Audio analysis needed for animation mode: {args.animation_mode}"
+                )
 
             # Find main audio file if not specified
             if not args.main_audio:

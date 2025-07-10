@@ -76,6 +76,25 @@ def sample_animation_data():
     }
 
 
+@pytest.fixture
+def sample_multi_pip_data():
+    """Sample animation data for multi-pip mode with sections, beats, and energy."""
+    return {
+        "duration": 60.0,
+        "tempo": {"bpm": 120.0},
+        "animation_events": {
+            "beats": [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0],
+            "energy_peaks": [1.2, 2.8, 4.1, 5.5],
+            "sections": [
+                {"start": 0.0, "end": 15.0, "label": "intro"},
+                {"start": 15.0, "end": 30.0, "label": "verse"},
+                {"start": 30.0, "end": 45.0, "label": "chorus"},
+                {"start": 45.0, "end": 60.0, "label": "outro"},
+            ],
+        },
+    }
+
+
 class TestBlenderVSEAnimationsMVP:
     """Test class for Phase 3A MVP - Beat Switch Animation."""
 
@@ -528,3 +547,182 @@ class TestAnimateEnergyPulse:
             # 0.5s = frame 15, 1.0s = frame 30, 1.5s = frame 45
             # 2 initial + 3 peaks * 2 keyframes * 2 axes = 2 + 12 = 14 keyframes
             assert mock_bpy.context.scene.keyframe_insert.call_count >= 14
+
+
+class TestMultiPipMode:
+    """Tests for Multi-PiP Mode animation - Phase 3B.2."""
+
+    def test_animate_multi_pip_function_exists(self, mock_bpy):
+        """Test that animate_multi_pip function can be called."""
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            # Function should exist (will fail until implemented)
+            assert hasattr(configurator, "_animate_multi_pip")
+
+    def test_animate_multi_pip_basic_call(self, mock_bpy, sample_multi_pip_data):
+        """Test basic multi-pip animation call with sample data."""
+        # Create mock strips (as list, like other animation functions)
+        strips = []
+        for i in range(1, 5):  # video1, video2, video3, video4
+            strip = Mock()
+            strip.name = f"Video_{i}"
+            strip.blend_alpha = 1.0
+            strip.transform = Mock()
+            strip.transform.offset_x = 0
+            strip.transform.offset_y = 0
+            strip.transform.scale_x = 1.0
+            strip.transform.scale_y = 1.0
+            strips.append(strip)
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._animate_multi_pip(strips, sample_multi_pip_data)
+
+            assert result is True
+
+    def test_setup_main_camera_sections_function_exists(self, mock_bpy):
+        """Test that _setup_main_camera_sections helper function exists."""
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            assert hasattr(configurator, "_setup_main_camera_sections")
+
+    def test_setup_main_camera_sections_basic_logic(
+        self, mock_bpy, sample_multi_pip_data
+    ):
+        """Test main camera section switching logic."""
+        # Create mock main camera strips (video1, video2)
+        video1 = Mock()
+        video1.name = "Video_1"
+        video1.blend_alpha = 1.0
+
+        video2 = Mock()
+        video2.name = "Video_2"
+        video2.blend_alpha = 1.0
+
+        main_cameras = {"Video_1": video1, "Video_2": video2}
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._setup_main_camera_sections(
+                main_cameras, sample_multi_pip_data
+            )
+
+            assert result is True
+            # Should have keyframes for section transitions
+            assert mock_bpy.context.scene.keyframe_insert.call_count > 0
+
+    def test_setup_corner_pip_effects_function_exists(self, mock_bpy):
+        """Test that _setup_corner_pip_effects helper function exists."""
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            assert hasattr(configurator, "_setup_corner_pip_effects")
+
+    def test_setup_corner_pip_effects_basic_logic(
+        self, mock_bpy, sample_multi_pip_data
+    ):
+        """Test corner PiP effects (scale + position animations)."""
+        # Create mock corner PiP strips (video3, video4, and non-active main cameras)
+        video3 = Mock()
+        video3.name = "Video_3"
+        video3.transform = Mock()
+        video3.transform.offset_x = 1680  # Top-right corner
+        video3.transform.offset_y = 200
+        video3.transform.scale_x = 0.25
+        video3.transform.scale_y = 0.25
+
+        video4 = Mock()
+        video4.name = "Video_4"
+        video4.transform = Mock()
+        video4.transform.offset_x = 240  # Top-left corner
+        video4.transform.offset_y = 200
+        video4.transform.scale_x = 0.25
+        video4.transform.scale_y = 0.25
+
+        corner_pips = {"Video_3": video3, "Video_4": video4}
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            result = configurator._setup_corner_pip_effects(
+                corner_pips, sample_multi_pip_data
+            )
+
+            assert result is True
+            # Should have keyframes for beat/energy effects on corner PiPs
+            assert mock_bpy.context.scene.keyframe_insert.call_count > 0
+
+    def test_multi_pip_layout_calculation(self, mock_bpy):
+        """Test multi-pip layout positioning calculation."""
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+
+            # Should have method to calculate multi-pip positions
+            assert hasattr(configurator, "_calculate_multi_pip_layout")
+
+            layout = configurator._calculate_multi_pip_layout(4)
+
+            # Should return 4 positions for 4 strips
+            assert len(layout) == 4
+
+            # Position 0,1: Main cameras (fullscreen)
+            assert layout[0] == (960, 540, 1.0)  # video1 - center, full scale
+            assert layout[1] == (960, 540, 1.0)  # video2 - center, full scale
+
+            # Position 2,3: Corner PiPs
+            assert layout[2][2] == 0.25  # video3 - corner scale
+            assert layout[3][2] == 0.25  # video4 - corner scale
+
+    def test_multi_pip_integration_with_vse_configurator(
+        self, mock_bpy, sample_multi_pip_data
+    ):
+        """Test multi-pip mode integration with main VSE configurator."""
+        # Create mock sequencer with video strips
+        mock_sequencer = Mock()
+
+        # Create mock video strips
+        strips = []
+        for i in range(1, 5):
+            strip = Mock()
+            strip.name = f"Video_{i}"
+            strip.blend_alpha = 1.0
+            strip.transform = Mock()
+            strip.transform.offset_x = 0
+            strip.transform.offset_y = 0
+            strip.transform.scale_x = 1.0
+            strip.transform.scale_y = 1.0
+            strips.append(strip)
+
+        mock_sequencer.sequences = strips
+
+        with patch("src.core.blender_vse_script.bpy", mock_bpy):
+            from src.core.blender_vse_script import BlenderVSEConfigurator
+
+            configurator = BlenderVSEConfigurator()
+            configurator.animation_mode = "multi-pip"
+
+            # Mock the audio analysis data loading
+            with patch.object(
+                configurator, "_load_animation_data", return_value=sample_multi_pip_data
+            ):
+                result = configurator._apply_animations(mock_sequencer)
+
+            assert result is True

@@ -274,7 +274,9 @@ class BlenderVSEConfigurator:
 
         # Get video strips (exclude audio strips)
         video_strips = [
-            seq for seq in sequencer.sequences if hasattr(seq, "blend_alpha")
+            seq
+            for seq in sequencer.sequences
+            if hasattr(seq, "blend_alpha") and hasattr(seq, "transform")
         ]
         if not video_strips:
             print("✗ No video strips found for animation")
@@ -296,6 +298,13 @@ class BlenderVSEConfigurator:
                 print("✓ Energy pulse animation applied successfully")
             else:
                 print("✗ Energy pulse animation failed")
+            return success
+        elif self.animation_mode == "multi-pip":
+            success = self._animate_multi_pip(video_strips, animation_data)
+            if success:
+                print("✓ Multi-PiP animation applied successfully")
+            else:
+                print("✗ Multi-PiP animation failed")
             return success
         else:
             print(f"✗ Animation mode '{self.animation_mode}' not implemented yet")
@@ -353,8 +362,17 @@ class BlenderVSEConfigurator:
                 events_data["energy_peaks"] = animation_events["energy_peaks"]
                 print(f"✓ Loaded {len(events_data['energy_peaks'])} energy peak events")
 
+            # Phase 3B.2: Support sections for multi-pip mode
+            if "sections" in animation_events:
+                events_data["sections"] = animation_events["sections"]
+                print(
+                    f"✓ Loaded {len(events_data['sections'])} section boundary events"
+                )
+
             if not events_data:
-                print("No supported animation events found (beats or energy_peaks)")
+                print(
+                    "No supported animation events found (beats, energy_peaks, or sections)"
+                )
                 return None
 
             # Phase 3B: Return expanded data
@@ -552,6 +570,276 @@ class BlenderVSEConfigurator:
                     )
 
         print("✓ Energy pulse animation applied successfully")
+        return True
+
+    def _animate_multi_pip(self, video_strips: List, animation_data: Dict) -> bool:
+        """
+        Apply Multi-PiP animation mode.
+
+        Layout: Main cameras (video1/video2) switch on section boundaries,
+               Corner PiPs (video3/video4+) always visible with beat/energy effects.
+
+        Args:
+            video_strips: List of video strips
+            animation_data: Animation data with sections, beats, and energy_peaks
+
+        Returns:
+            bool: True if animation applied successfully
+        """
+        print("=== Applying Multi-PiP animation mode ===")
+
+        # Get required data
+        # Get sections from animation data (already converted to objects)
+        sections = animation_data.get("animation_events", {}).get("sections", [])
+        beats = animation_data.get("animation_events", {}).get("beats", [])
+        energy_peaks = animation_data.get("animation_events", {}).get(
+            "energy_peaks", []
+        )
+
+        print(
+            f"Found {len(sections)} sections, {len(beats)} beats, {len(energy_peaks)} energy peaks"
+        )
+
+        if not sections:
+            print("✗ No sections found for Multi-PiP mode")
+            return False
+
+        # Setup multi-pip layout positions
+        layout = self._calculate_multi_pip_layout(len(video_strips))
+
+        # Apply layout positions to all strips
+        for i, strip in enumerate(video_strips):
+            if i < len(layout):
+                pos_x, pos_y, base_scale = layout[i]
+                strip.transform.offset_x = pos_x
+                strip.transform.offset_y = pos_y
+                strip.transform.scale_x = base_scale
+                strip.transform.scale_y = base_scale
+                print(
+                    f"  {strip.name}: position ({pos_x}, {pos_y}), scale {base_scale}"
+                )
+
+        # Separate main cameras from corner PiPs
+        main_cameras = {}
+        corner_pips = {}
+
+        for i, strip in enumerate(video_strips):
+            if i < 2:  # First two strips are main cameras
+                main_cameras[strip.name] = strip
+            else:  # Rest are corner PiPs
+                corner_pips[strip.name] = strip
+
+        print(f"Main cameras: {list(main_cameras.keys())}")
+        print(f"Corner PiPs: {list(corner_pips.keys())}")
+
+        # Setup main camera section switching (pass converted sections)
+        success1 = self._setup_main_camera_sections(
+            main_cameras, {"sections": sections}
+        )
+
+        # Setup corner PiP effects
+        success2 = self._setup_corner_pip_effects(corner_pips, animation_data)
+
+        return success1 and success2
+
+    def _calculate_multi_pip_layout(
+        self, strip_count: int
+    ) -> List[Tuple[int, int, float]]:
+        """
+        Calculate Multi-PiP layout positions based on scene resolution.
+
+        In Blender VSE, (0,0) is the center of the screen.
+        Positive X is right, negative X is left.
+        Positive Y is up, negative Y is down.
+
+        Args:
+            strip_count: Number of video strips
+
+        Returns:
+            List of (pos_x, pos_y, scale) tuples for each strip
+        """
+        # Get scene resolution for calculating offsets
+        width = bpy.context.scene.render.resolution_x
+        height = bpy.context.scene.render.resolution_y
+
+        # PiP settings
+        pip_scale = 0.25
+        pip_margin = 160  # Distance from edge
+
+        # Calculate corner positions relative to center (0,0)
+        # For 1280x720: half_width=640, half_height=360
+        half_width = width // 2
+        half_height = height // 2
+
+        # Corner positions (offset from center)
+        top_left_x = -(half_width - pip_margin)  # Left side
+        top_left_y = half_height - pip_margin  # Top side
+        top_right_x = half_width - pip_margin  # Right side
+        top_right_y = half_height - pip_margin  # Top side
+        bottom_left_x = -(half_width - pip_margin)  # Left side
+        bottom_left_y = -(half_height - pip_margin)  # Bottom side
+        bottom_right_x = half_width - pip_margin  # Right side
+        bottom_right_y = -(half_height - pip_margin)  # Bottom side
+
+        layout = []
+
+        if strip_count >= 1:
+            # video1: Main camera (fullscreen, center)
+            layout.append((0, 0, 1.0))
+        if strip_count >= 2:
+            # video2: Main camera (fullscreen, center)
+            layout.append((0, 0, 1.0))
+        if strip_count >= 3:
+            # video3: Top-right corner PiP
+            layout.append((top_right_x, top_right_y, pip_scale))
+        if strip_count >= 4:
+            # video4: Top-left corner PiP
+            layout.append((top_left_x, top_left_y, pip_scale))
+        if strip_count >= 5:
+            # video5: Bottom-right corner PiP
+            layout.append((bottom_right_x, bottom_right_y, pip_scale))
+        if strip_count >= 6:
+            # video6: Bottom-left corner PiP (fallback)
+            layout.append((bottom_left_x, bottom_left_y, pip_scale))
+
+        return layout
+
+    def _setup_main_camera_sections(
+        self, main_cameras: Dict, animation_data: Dict
+    ) -> bool:
+        """
+        Setup main camera section switching.
+
+        Main cameras (video1/video2) alternate on section boundaries.
+
+        Args:
+            main_cameras: Dictionary of main camera strips
+            animation_data: Animation data with sections
+
+        Returns:
+            bool: True if setup successful
+        """
+        sections = animation_data.get("sections", [])
+        fps = bpy.context.scene.render.fps
+
+        print("=== Setting up main camera section switching ===")
+
+        strip_names = list(main_cameras.keys())
+        if len(strip_names) < 2:
+            print("✗ Need at least 2 main cameras for section switching")
+            return False
+
+        # Initially hide all main cameras
+        for strip in main_cameras.values():
+            strip.blend_alpha = 0.0
+
+        # Setup section switching (alternating between video1 and video2)
+        for section_index, section in enumerate(sections):
+            start_frame = int(section["start"] * fps)
+            end_frame = int(section["end"] * fps)
+
+            # Determine which camera should be active
+            active_index = section_index % len(strip_names)
+            active_strip_name = strip_names[active_index]
+            active_strip = main_cameras[active_strip_name]
+
+            print(
+                f"  Section {section_index + 1} ({section['label']}): frames {start_frame}-{end_frame}, camera {active_strip_name}"
+            )
+
+            # Hide all cameras at section start
+            for strip in main_cameras.values():
+                strip.blend_alpha = 0.0
+                data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
+                bpy.context.scene.keyframe_insert(
+                    data_path=data_path, frame=start_frame
+                )
+
+            # Show active camera
+            active_strip.blend_alpha = 1.0
+            data_path = (
+                f'sequence_editor.sequences_all["{active_strip.name}"].blend_alpha'
+            )
+            bpy.context.scene.keyframe_insert(data_path=data_path, frame=start_frame)
+
+        return True
+
+    def _setup_corner_pip_effects(
+        self, corner_pips: Dict, animation_data: Dict
+    ) -> bool:
+        """
+        Setup corner PiP effects (beat/energy animations).
+
+        Corner PiPs are always visible and react to beats/energy.
+
+        Args:
+            corner_pips: Dictionary of corner PiP strips
+            animation_data: Animation data with beats and energy_peaks
+
+        Returns:
+            bool: True if setup successful
+        """
+        energy_peaks = animation_data.get("animation_events", {}).get(
+            "energy_peaks", []
+        )
+        fps = bpy.context.scene.render.fps
+
+        print("=== Setting up corner PiP effects ===")
+
+        if not corner_pips:
+            print("✓ No corner PiPs to animate")
+            return True
+
+        # Make all corner PiPs visible
+        for strip in corner_pips.values():
+            strip.blend_alpha = 1.0
+
+        # Add beat-based scale pulsing (like energy-pulse mode)
+        for strip in corner_pips.values():
+            # Set initial scale keyframes at frame 1
+            data_path_x = (
+                f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+            )
+            data_path_y = (
+                f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
+            )
+            bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=1)
+            bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=1)
+
+        # Animate on energy peaks (bass response)
+        for peak_index, peak_time in enumerate(energy_peaks):
+            frame = int(peak_time * fps)
+
+            for strip in corner_pips.values():
+                # Get current base scale from layout
+                current_scale = strip.transform.scale_x
+                pulse_scale = current_scale * 1.1  # 10% pulse for corner PiPs
+
+                # Scale up on energy peak
+                strip.transform.scale_x = pulse_scale
+                strip.transform.scale_y = pulse_scale
+
+                data_path_x = (
+                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                )
+                data_path_y = (
+                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
+                )
+                bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=frame)
+                bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=frame)
+
+                # Scale back down (1 frame later)
+                return_frame = frame + 1
+                strip.transform.scale_x = current_scale
+                strip.transform.scale_y = current_scale
+                bpy.context.scene.keyframe_insert(
+                    data_path=data_path_x, frame=return_frame
+                )
+                bpy.context.scene.keyframe_insert(
+                    data_path=data_path_y, frame=return_frame
+                )
+
+        print(f"✓ Corner PiP effects applied to {len(corner_pips)} strips")
         return True
 
 

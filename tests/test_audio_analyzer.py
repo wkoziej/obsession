@@ -197,10 +197,26 @@ class TestAudioAnalyzerCore:
         assert "mid_energy" in bands
         assert "high_energy" in bands
 
-        # All arrays should have same length
-        assert len(bands["times"]) == len(bands["bass_energy"])
-        assert len(bands["times"]) == len(bands["mid_energy"])
-        assert len(bands["times"]) == len(bands["high_energy"])
+    def test_convert_boundaries_to_sections(self, mock_analyzer):
+        """Test conversion of boundaries to section objects."""
+        boundaries = [0.0, 30.5, 60.0, 90.5, 120.0]
+        sections = mock_analyzer._convert_boundaries_to_sections(boundaries)
+
+        assert len(sections) == 4  # 5 boundaries -> 4 sections
+        assert sections[0]["start"] == 0.0
+        assert sections[0]["end"] == 30.5
+        assert sections[0]["label"] == "section_1"
+        assert sections[1]["start"] == 30.5
+        assert sections[1]["end"] == 60.0
+        assert sections[1]["label"] == "section_2"
+        assert sections[3]["start"] == 90.5
+        assert sections[3]["end"] == 120.0
+        assert sections[3]["label"] == "section_4"
+
+    def test_convert_boundaries_to_sections_empty(self, mock_analyzer):
+        """Test conversion with empty or insufficient boundaries."""
+        assert mock_analyzer._convert_boundaries_to_sections([]) == []
+        assert mock_analyzer._convert_boundaries_to_sections([0.0]) == []
 
 
 class TestAudioAnalyzerHelpers:

@@ -1,8 +1,8 @@
 # Audio Animation PoC - TODO Tracker
 
-## Status: 🎉 Phase 3B.1: Energy Pulse Animation - COMPLETE SUCCESS! 🎆
+## Status: 🎉 Phase 3B.2: Multi-PiP Mode - COMPLETE SUCCESS! 🎆
 
-Last updated: 2025-07-09
+Last updated: 2025-07-10
 
 ## Progress Overview
 
@@ -13,7 +13,8 @@ Last updated: 2025-07-09
 - [x] **Phase 2: System Integration** ✅ COMPLETE 
 - [x] **Phase 3A: MVP Beat Switch Animation** ✅ END-TO-END SUCCESS
 - [x] **Phase 3B.1: Energy Pulse Animation** ✅ COMPLETE SUCCESS
-- [ ] Phase 3B.2: Pozostałe tryby animacji (section-transition, multi-pip)
+- [x] **Phase 3B.2: Multi-PiP Mode** ✅ COMPLETE SUCCESS
+- [x] **Phase 3C: Format Consistency Fix** ✅ COMPLETE SUCCESS
 - [ ] Phase 4: Demo & Documentation
 
 ---
@@ -133,11 +134,39 @@ Last updated: 2025-07-09
 - [x] Expanded _load_animation_data() to support beats + energy_peaks
 - [x] Larger blend files (481440 bytes vs 380480 bytes) confirming scale keyframes
 
-### 3B.2 Pozostałe tryby animacji - FUTURE
-- [ ] animate_section_transitions() - płynne przejścia na sections
-- [ ] animate_multi_pip() - wszystkie PiP widoczne z różnymi efektami
+### 3B.2 Multi-PiP Mode Implementation - COMPLETE SUCCESS ✅
+- [x] animate_multi_pip() - main cameras (video1/video2) section-based switching + corner PiP effects
+- [x] _setup_main_camera_sections() - blend_alpha switching on section boundaries  
+- [x] _setup_corner_pip_effects() - position + scale animations for remaining strips
+- [x] Integration with sections data from audio analysis
+- [x] End-to-end test: --animation-mode multi-pip
+- [x] Manual verification: section switching + corner PiP effects in Blender
+- [x] Fixed section boundaries conversion (array → objects with start/end/label)
+- [x] Fixed video strip filtering (exclude audio strips)
+- [x] Enhanced _load_animation_data() to support sections
+- [x] 8 new tests passing for Multi-PiP animation (TDD approach)
+
+### 3B.3 Automatic Audio Analysis - COMPLETE SUCCESS ✅
+- [x] Implemented automatic audio analysis in blend_setup CLI
+- [x] Smart detection: triggers when animation_mode != "none" and no existing analysis
+- [x] Cache-aware: uses existing analysis files, doesn't re-analyze
+- [x] Added _has_existing_audio_analysis() helper function
+- [x] Backward compatible: --analyze-audio flag still works for manual control
+- [x] End-to-end testing: verified automatic analysis + cache behavior
+
+### 3C Format Consistency Fix - COMPLETE SUCCESS ✅
+- [x] Fixed AudioAnalyzer sections format: array → objects with {start, end, label}
+- [x] Added _convert_boundaries_to_sections() method to AudioAnalyzer
+- [x] Updated animation_events.sections to use objects format directly
+- [x] Removed duplicate conversion logic from blender_vse_script.py
+- [x] Added tests for boundary to sections conversion
+- [x] Re-analyzed audio with correct format: sections are now objects
+- [x] End-to-end testing: all animation modes work with fixed sections format
+
+### 3B.4 Advanced animation features - FUTURE  
+- [ ] animate_section_transitions() - smooth transitions between sections
 - [ ] Advanced keyframe helpers i easing functions
-- [ ] Kombinacja animacji (beat-switch + energy-pulse)
+- [ ] Kombinacja animacji (multi-pip + energy-pulse for corner PiPs)
 
 ---
 
@@ -182,6 +211,34 @@ Last updated: 2025-07-09
   - Total new tests: 34 tests passing
   - Ready for Phase 3: Blender Animations
 
+### Multi-PiP Mode Layout Design (Updated 2025-07-10)
+
+**Layout Specification:**
+```
+┌─────────────────────────────────────────────────────┐
+│ [PiP4]                                    [PiP3]   │
+│  📹 (corner)                              📹 (corner)│
+│  - Always visible                        - Always visible│
+│  - Beat/energy effects                   - Beat/energy effects│
+│                                                     │
+│           📹 Main Camera (video1 OR video2)         │
+│           - Fullscreen background                   │
+│           - Switches on section boundaries          │
+│           - Smooth fade in/out transitions          │
+│                                                     │
+│                                         [PiP2]     │
+│                                          📹 (corner)│
+│                                         - Always visible│
+│                                         - Beat/energy effects│
+└─────────────────────────────────────────────────────┘
+```
+
+**Animation Logic:**
+- **Main Background**: video1 (section 1) → video2 (section 2) → video1 (section 3) → etc.
+- **Corner PiPs**: video3, video4 (+ video1/video2 when not main) - always visible, react to beats/energy
+- **Section timing**: Based on `animation_events.sections` from audio analysis
+- **PiP effects**: Scale pulsing on energy_peaks, position dancing on beats
+
 ### 2025-07-09
 - ✅ PHASE 3A: MVP BEAT SWITCH ANIMATION - END-TO-END SUCCESS:
   - Phase 3A.1: TDD implementation - 16 animation tests passing
@@ -200,6 +257,36 @@ Last updated: 2025-07-09
   - Expanded _load_animation_data() to support both beats and energy_peaks
   - Larger blend files (481440 vs 380480 bytes) confirming scale animation keyframes
   - Total tests: 255+ passing (21 + 34 + 16 + 5 + integration tests)
+
+### 2025-07-10 (Part 1)
+- ✅ PHASE 3B.2: MULTI-PIP MODE - COMPLETE SUCCESS:
+  - 8 new tests passing for Multi-PiP animation (TDD approach)
+  - Full Multi-PiP implementation: main cameras section switching + corner PiP effects
+  - Layout: video1/video2 fullscreen alternating, video3+ in corners with beat/energy effects
+  - Fixed section boundaries format conversion (array → {start, end, label} objects)
+  - Enhanced video strip filtering to exclude audio strips properly
+  - End-to-end CLI success: --animation-mode multi-pip creates full projects
+  - Total tests: 263+ passing (21 + 34 + 16 + 5 + 8 + integration tests)
+
+- ✅ AUTOMATIC AUDIO ANALYSIS - COMPLETE SUCCESS:
+  - Implemented smart automatic audio analysis in blend_setup CLI
+  - Triggers automatically when animation_mode != "none" and no existing analysis
+  - Cache-aware behavior: reuses existing analysis files, no duplicate processing
+  - Backward compatible: --analyze-audio flag preserved for manual control
+  - Zero workflow friction: one command now does everything automatically
+  - End-to-end verification: auto-analysis + cache + all animation modes working
+
+### 2025-07-10 (Part 2)  
+- ✅ PHASE 3C: FORMAT CONSISTENCY FIX - COMPLETE SUCCESS:
+  - Fixed critical format inconsistency in animation_events.sections
+  - AudioAnalyzer was outputting array of timestamps but docs expected objects
+  - Added _convert_boundaries_to_sections() method to AudioAnalyzer
+  - Changed sections format from [0.0, 30.5, 60.0] to [{"start": 0.0, "end": 30.5, "label": "section_1"}]
+  - Removed duplicate conversion logic from blender_vse_script.py
+  - Added unit tests for boundary conversion (test_convert_boundaries_to_sections)
+  - Re-analyzed test audio file with correct sections format
+  - End-to-end testing: verified all animation modes (beat-switch, energy-pulse, multi-pip) work correctly
+  - Total tests: 265+ passing (21 + 34 + 16 + 5 + 8 + 2 conversion tests)
 
 ### Design Decisions
 - Using lazy loading for optional dependencies
@@ -247,10 +334,12 @@ uv run pytest tests/test_audio_analyzer.py --cov=src.core.audio_analyzer
 # Test audio analysis CLI
 uv run python -m cli.analyze_audio audio_file.wav ./output --beat-division 4
 
-# Test specific animation modes (WORKING!)
-uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode beat-switch --beat-division 8 --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a" --verbose
+# Test animation modes (AUTOMATIC AUDIO ANALYSIS!)
+uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode beat-switch --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a"
 
-uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode energy-pulse --beat-division 8 --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a" --verbose
+uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode energy-pulse --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a"
+
+uv run python -m src.cli.blend_setup "/home/wojtas/Wideo/obs/2025-07-08 19-38-18" --animation-mode multi-pip --main-audio "Przechwytywanie wejścia dźwięku (PulseAudio).m4a"
 
 # Quick demo
 uv run python demo_audio_animation.py
@@ -308,10 +397,11 @@ Animacje bazują na danych z `AudioAnalyzer.analyze_for_animation()` zapisanych 
 - **How it works**: Smooth transitions between strips on section boundaries
 - **Keyframes**: Multiple properties (blend_alpha, transform, effects)
 
-**4. Multi-PiP** (future - `--animation-mode multi-pip`)
-- **Data source**: `animation_events.onsets` + `frequency_bands`
-- **How it works**: All strips visible simultaneously with different effects
-- **Keyframes**: Position, scale, rotation based on frequency analysis
+**4. Multi-PiP** (`--animation-mode multi-pip`) ✅ IMPLEMENTED
+- **Data source**: `animation_events.sections` + `animation_events.energy_peaks` + `animation_events.beats`
+- **How it works**: Main cameras (video1/video2) switch on section boundaries, corner PiPs have beat/energy effects
+- **Layout**: video1/video2 fullscreen (alternating), video3/video4 in corners (always visible)
+- **Keyframes**: Main cameras - blend_alpha on sections, Corner PiPs - scale/position on beats/energy
 
 ### Beat Division Impact
 

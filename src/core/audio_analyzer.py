@@ -97,7 +97,8 @@ class AudioAnalyzer:
         # Structure boundaries
         logger.info("Detecting structural boundaries...")
         boundaries = self._detect_boundaries(y, sr)
-        result["animation_events"]["sections"] = boundaries
+        sections = self._convert_boundaries_to_sections(boundaries)
+        result["animation_events"]["sections"] = sections
 
         # Onset detection (filtered)
         logger.info("Detecting onsets...")
@@ -186,6 +187,31 @@ class AudioAnalyzer:
         )
 
         return [times[peak] for peak in peaks]
+
+    def _convert_boundaries_to_sections(self, boundaries: List[float]) -> List[Dict]:
+        """
+        Convert section boundaries to section objects.
+
+        Args:
+            boundaries: List of section boundary timestamps
+
+        Returns:
+            List of section objects with start, end, and label
+        """
+        if not boundaries or len(boundaries) < 2:
+            return []
+
+        sections = []
+        for i in range(len(boundaries) - 1):
+            sections.append(
+                {
+                    "start": boundaries[i],
+                    "end": boundaries[i + 1],
+                    "label": f"section_{i + 1}",
+                }
+            )
+
+        return sections
 
     def save_analysis(self, analysis: Dict, output_path: Path) -> None:
         """Save analysis results to JSON file."""
