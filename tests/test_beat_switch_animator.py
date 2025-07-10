@@ -101,7 +101,7 @@ class TestBeatSwitchAnimatorValidation:
 class TestBeatSwitchAnimatorLogic:
     """Test core beat switch animation logic."""
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_initial_state_setup(self, mock_bpy):
         """Should set initial visibility state correctly."""
         animator = BeatSwitchAnimator()
@@ -127,7 +127,7 @@ class TestBeatSwitchAnimatorLogic:
         # Second strip should be hidden initially
         assert strip2.blend_alpha == 0.0
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_beat_switching_logic(self, mock_bpy):
         """Should switch active strip on each beat correctly."""
         animator = BeatSwitchAnimator()
@@ -154,7 +154,7 @@ class TestBeatSwitchAnimatorLogic:
         # Beat 4 (frame 120): strip 1 active (index 0) - cycling
         # Beat 5 (frame 150): strip 2 active (index 1)
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_frame_calculation(self, mock_bpy):
         """Should calculate frame numbers correctly from beat times."""
         animator = BeatSwitchAnimator()
@@ -192,7 +192,7 @@ class TestBeatSwitchAnimatorLogic:
             beats = [i * 0.5 for i in range(1, strip_count * 2 + 3)]  # 2+ full cycles
             animation_data = {"animation_events": {"beats": beats}}
 
-            with patch("core.blender_vse.animators.beat_switch_animator.bpy"):
+            with patch("core.blender_vse.keyframe_helper.bpy"):
                 result = animator.animate(strips, animation_data, 30)
                 assert result is True
 
@@ -200,7 +200,7 @@ class TestBeatSwitchAnimatorLogic:
 class TestBeatSwitchAnimatorKeyframeIntegration:
     """Test integration with KeyframeHelper."""
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_uses_keyframe_helper(self, mock_bpy):
         """Should use KeyframeHelper for all keyframe insertions."""
         animator = BeatSwitchAnimator()
@@ -229,7 +229,7 @@ class TestBeatSwitchAnimatorKeyframeIntegration:
             >= expected_calls
         )
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_keyframe_parameters(self, mock_bpy):
         """Should pass correct parameters to KeyframeHelper."""
         animator = BeatSwitchAnimator()
@@ -281,7 +281,7 @@ class TestBeatSwitchAnimatorCompatibility:
         result = animator.animate(video_strips, animation_data, fps)
         assert isinstance(result, bool)
 
-    @patch("core.blender_vse.animators.beat_switch_animator.bpy")
+    @patch("core.blender_vse.keyframe_helper.bpy")
     def test_animate_behavior_compatibility(self, mock_bpy):
         """Should produce same animation behavior as original method."""
         animator = BeatSwitchAnimator()

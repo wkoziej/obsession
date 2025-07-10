@@ -177,16 +177,48 @@ class TestAudioAnalyzerIntegration:
         duration = result["duration"]
 
         for event_type, events in result["animation_events"].items():
-            for event_time in events:
-                assert 0 <= event_time <= duration, (
-                    f"{event_type} event at {event_time} outside duration {duration}"
-                )
+            for event in events:
+                if event_type == "sections":
+                    # Sections are dict objects with start/end times
+                    assert isinstance(event, dict), (
+                        f"Section should be dict, got {type(event)}"
+                    )
+                    assert "start" in event and "end" in event, (
+                        f"Section missing start/end: {event}"
+                    )
+                    assert 0 <= event["start"] <= duration, (
+                        f"Section start {event['start']} outside duration {duration}"
+                    )
+                    assert 0 <= event["end"] <= duration, (
+                        f"Section end {event['end']} outside duration {duration}"
+                    )
+                    assert event["start"] <= event["end"], (
+                        f"Section start {event['start']} > end {event['end']}"
+                    )
+                else:
+                    # Other events are timestamps (floats)
+                    assert 0 <= event <= duration, (
+                        f"{event_type} event at {event} outside duration {duration}"
+                    )
 
         # All times should be positive and sorted
         for event_type, events in result["animation_events"].items():
             if len(events) > 0:
-                assert all(t >= 0 for t in events), f"{event_type} has negative times"
-                assert events == sorted(events), f"{event_type} events not sorted"
+                if event_type == "sections":
+                    # Sections are sorted by start time
+                    start_times = [s["start"] for s in events]
+                    assert all(t >= 0 for t in start_times), (
+                        f"{event_type} has negative start times"
+                    )
+                    assert start_times == sorted(start_times), (
+                        f"{event_type} sections not sorted by start time"
+                    )
+                else:
+                    # Other events are timestamp lists
+                    assert all(t >= 0 for t in events), (
+                        f"{event_type} has negative times"
+                    )
+                    assert events == sorted(events), f"{event_type} events not sorted"
 
         # Frequency band times should match band data length
         band_times = result["frequency_bands"]["times"]

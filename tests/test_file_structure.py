@@ -466,7 +466,7 @@ class TestFileStructureAnalysisIntegration:
 
         analysis_path = FileStructureManager.get_analysis_file_path(video_file)
 
-        expected = recording_dir / "analysis" / "test_recording_audio_analysis.json"
+        expected = recording_dir / "analysis" / "test_recording_analysis.json"
         assert analysis_path == expected
 
     def test_save_audio_analysis_creates_structure(self, tmp_path):
@@ -488,7 +488,7 @@ class TestFileStructureAnalysisIntegration:
         assert analysis_dir.is_dir()
 
         # Sprawdź czy plik został zapisany
-        expected_path = analysis_dir / "test_recording_audio_analysis.json"
+        expected_path = analysis_dir / "test_recording_analysis.json"
         assert saved_path == expected_path
         assert saved_path.exists()
 
@@ -508,7 +508,7 @@ class TestFileStructureAnalysisIntegration:
         # Utwórz katalog analysis i plik
         analysis_dir = recording_dir / "analysis"
         analysis_dir.mkdir()
-        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+        analysis_file = analysis_dir / "test_recording_analysis.json"
         analysis_file.write_text('{"test": "data"}')
 
         found_path = FileStructureManager.find_audio_analysis(video_file)
@@ -540,7 +540,7 @@ class TestFileStructureAnalysisIntegration:
 
         analysis_dir = recording_dir / "analysis"
         analysis_dir.mkdir()
-        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+        analysis_file = analysis_dir / "test_recording_analysis.json"
 
         import json
 
@@ -569,7 +569,7 @@ class TestFileStructureAnalysisIntegration:
         # Utwórz plik z niepoprawnym JSON
         analysis_dir = recording_dir / "analysis"
         analysis_dir.mkdir()
-        analysis_file = analysis_dir / "test_recording_audio_analysis.json"
+        analysis_file = analysis_dir / "test_recording_analysis.json"
         analysis_file.write_text("invalid json content")
 
         loaded_data = FileStructureManager.load_audio_analysis(video_file)

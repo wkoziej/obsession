@@ -316,12 +316,14 @@ class FileStructureManager:
         if "extracted" in video_path.parts:
             # For extracted files, go up one level to get the recording directory
             recording_dir = video_path.parent.parent
+            # Use recording directory name for analysis file
+            base_name = recording_dir.name
         else:
             # For main video files, parent is the recording directory
             recording_dir = video_path.parent
+            # Use video file name for analysis file
+            base_name = video_path.stem
 
-        # Nazwa pliku analizy bazuje na nazwie pliku wideo
-        base_name = video_path.stem
         analysis_filename = f"{base_name}_analysis.json"
 
         return recording_dir / FileStructureManager.ANALYSIS_DIRNAME / analysis_filename

@@ -353,6 +353,14 @@ class TestBlenderProjectManagerAudioIntegration:
             "animation_events": {"beats": [1.0, 2.0, 3.0]},
         }
 
+        # Create a temporary analysis file
+        import json as json_module
+
+        analysis_file = tmp_path / "analysis" / "test_analysis.json"
+        analysis_file.parent.mkdir(exist_ok=True)
+        with open(analysis_file, "w") as f:
+            json_module.dump(analysis_data, f)
+
         # Test with audio analysis
         env_vars = manager._prepare_environment_variables_with_analysis(
             video_files,
@@ -360,7 +368,7 @@ class TestBlenderProjectManagerAudioIntegration:
             output_blend,
             render_output,
             fps=30,
-            analysis_data=analysis_data,
+            analysis_file_path=analysis_file,
             animation_mode="beat-switch",
             beat_division=8,
         )
@@ -375,12 +383,12 @@ class TestBlenderProjectManagerAudioIntegration:
         # Check new audio analysis variables
         assert env_vars["BLENDER_VSE_ANIMATION_MODE"] == "beat-switch"
         assert env_vars["BLENDER_VSE_BEAT_DIVISION"] == "8"
-        assert "BLENDER_VSE_AUDIO_ANALYSIS" in env_vars
+        assert "BLENDER_VSE_AUDIO_ANALYSIS_FILE" in env_vars
+        assert env_vars["BLENDER_VSE_AUDIO_ANALYSIS_FILE"] == str(analysis_file)
 
-        # Verify analysis data is JSON string
-        import json
-
-        loaded_analysis = json.loads(env_vars["BLENDER_VSE_AUDIO_ANALYSIS"])
+        # Verify analysis file contains correct data
+        with open(analysis_file, "r") as f:
+            loaded_analysis = json_module.load(f)
         assert loaded_analysis == analysis_data
 
     def test_prepare_environment_variables_without_audio_analysis(self, tmp_path):
@@ -410,7 +418,7 @@ class TestBlenderProjectManagerAudioIntegration:
         # Check audio analysis variables are not set or have defaults
         assert env_vars.get("BLENDER_VSE_ANIMATION_MODE") == "none"
         assert env_vars.get("BLENDER_VSE_BEAT_DIVISION") == "8"
-        assert env_vars.get("BLENDER_VSE_AUDIO_ANALYSIS") == ""
+        assert env_vars.get("BLENDER_VSE_AUDIO_ANALYSIS_FILE") == ""
 
     def test_create_vse_project_with_audio_analysis(
         self, sample_recording_structure, tmp_path
@@ -476,7 +484,13 @@ class TestBlenderProjectManagerAudioIntegration:
             args, kwargs = mock_run.call_args
             env_passed = kwargs.get("env", {})
             assert env_passed["BLENDER_VSE_ANIMATION_MODE"] == "beat-switch"
-            assert env_passed["BLENDER_VSE_AUDIO_ANALYSIS"] == ""
+            # File path should be generated even if file doesn't exist (Blender will handle gracefully)
+            expected_path = (
+                sample_recording_structure
+                / "analysis"
+                / f"{sample_recording_structure.name}_analysis.json"
+            )
+            assert env_passed["BLENDER_VSE_AUDIO_ANALYSIS_FILE"] == str(expected_path)
 
     def test_validate_animation_mode_valid_modes(self):
         """Test validation of animation modes."""
