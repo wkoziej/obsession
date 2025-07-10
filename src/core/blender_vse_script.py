@@ -35,11 +35,19 @@ from typing import List, Optional, Tuple, Dict
 try:
     from .blender_vse.config import BlenderVSEConfig
     from .blender_vse.constants import AnimationConstants
+    from .blender_vse.keyframe_helper import KeyframeHelper
+    from .blender_vse.layout_manager import BlenderLayoutManager
+    from .blender_vse.blender_animation_engine import BlenderAnimationEngine
+    from .blender_vse.project_setup import BlenderProjectSetup
 except ImportError:
     # Fallback for when script is run standalone in Blender
     sys.path.append(str(Path(__file__).parent))
     from blender_vse.config import BlenderVSEConfig
     from blender_vse.constants import AnimationConstants
+    from blender_vse.keyframe_helper import KeyframeHelper
+    from blender_vse.layout_manager import BlenderLayoutManager
+    from blender_vse.blender_animation_engine import BlenderAnimationEngine
+    from blender_vse.project_setup import BlenderProjectSetup
 
 
 class BlenderVSEConfigurator:
@@ -60,6 +68,22 @@ class BlenderVSEConfigurator:
         self.resolution_y = config.resolution_y
         self.animation_mode = config.animation_mode
         self.beat_division = config.beat_division
+
+        # Initialize components for delegation
+        self.animation_engine = BlenderAnimationEngine()
+
+        # Initialize project setup with config
+        self.project_setup = BlenderProjectSetup(
+            {
+                "fps": self.fps,
+                "resolution_x": self.resolution_x,
+                "resolution_y": self.resolution_y,
+                "video_files": self.video_files,
+                "main_audio": self.main_audio,
+                "output_blend": self.output_blend,
+                "render_output": self.render_output,
+            }
+        )
 
     def validate_parameters(self) -> Tuple[bool, List[str]]:
         """
@@ -89,140 +113,32 @@ class BlenderVSEConfigurator:
                 print(f"  - {error}")
             return False
 
-        try:
-            # 1. Wyczyść domyślną scenę
-            bpy.ops.wm.read_factory_settings(use_empty=True)
-            print("✓ Wyczyszczono domyślną scenę")
+        # Use BlenderProjectSetup for basic project setup
+        success = self.project_setup.setup_project()
+        if not success:
+            print("✗ Błąd konfiguracji podstawowego projektu")
+            return False
 
-            # 2. Utwórz sequence editor
-            if not bpy.context.scene.sequence_editor:
-                bpy.context.scene.sequence_editor_create()
-            print("✓ Utworzono sequence editor")
-
-            # 3. Skonfiguruj podstawowe ustawienia sceny
-            scene = bpy.context.scene
-            scene.render.resolution_x = self.resolution_x
-            scene.render.resolution_y = self.resolution_y
-            scene.render.fps = self.fps
-            scene.frame_start = 1
-            print(
-                f"✓ Ustawiono podstawowe parametry sceny ({self.resolution_x}x{self.resolution_y}, {self.fps}fps)"
-            )
-
-            # 4. Dodaj główny pasek audio (kanał 1)
-            sequencer = scene.sequence_editor
-
-            if self.main_audio:
-                try:
-                    sequencer.sequences.new_sound(
-                        name="Main_Audio",
-                        filepath=str(self.main_audio),
-                        channel=1,  # Kanał audio 1
-                        frame_start=1,
-                    )
-                    print(
-                        f"✓ Dodano główne audio: {self.main_audio.name} (kanał audio 1)"
-                    )
-                except Exception as e:
-                    print(f"✗ Błąd dodawania głównego audio: {e}")
-                    return False
-
-            # 5. Dodaj paski wideo do kanałów (zaczynając od kanału 2)
-            for i, video_file in enumerate(self.video_files):
-                try:
-                    # Dodaj pasek wideo do kanału (i + 2) - zaczynamy od kanału 2
-                    channel = i + 2
-                    sequencer.sequences.new_movie(
-                        name=f"Video_{i + 1}",
-                        filepath=str(video_file),
-                        channel=channel,
-                        frame_start=1,
-                    )
-                    print(
-                        f"✓ Dodano pasek wideo {i + 1}: {video_file.name} (kanał {channel})"
-                    )
-                except Exception as e:
-                    print(f"✗ Błąd dodawania wideo {video_file}: {e}")
-                    return False
-
-            # 6. Skonfiguruj ustawienia renderowania
-            render = scene.render
-            render.image_settings.file_format = "FFMPEG"
-            render.ffmpeg.format = "MPEG4"
-            render.ffmpeg.codec = "H264"
-            render.ffmpeg.constant_rate_factor = "HIGH"
-            render.filepath = str(self.render_output)
-            print("✓ Skonfigurowano ustawienia renderowania (MP4, H.264)")
-
-            # 7. Ustaw timeline aby pokazać całą zawartość
-            if sequencer.sequences:
-                # Znajdź najdłuższą sekwencję
-                max_frame_end = max(seq.frame_final_end for seq in sequencer.sequences)
-                scene.frame_end = max_frame_end
-                print(f"✓ Ustawiono koniec timeline na klatkę {max_frame_end}")
-
-            # 8. Zapisz plik .blend
-            if self.output_blend:
-                try:
-                    # Upewnij się, że katalog istnieje
-                    self.output_blend.parent.mkdir(parents=True, exist_ok=True)
-                    print(f"DEBUG: Attempting to save to: {self.output_blend}")
-                    print(
-                        f"DEBUG: Directory exists: {self.output_blend.parent.exists()}"
-                    )
-
-                    result = bpy.ops.wm.save_as_mainfile(
-                        filepath=str(self.output_blend)
-                    )
-                    print(f"DEBUG: Save operation result: {result}")
-
-                    # Check if file was actually created
-                    if self.output_blend.exists():
-                        print(f"✓ Zapisano projekt: {self.output_blend}")
-                        print(
-                            f"DEBUG: File size: {self.output_blend.stat().st_size} bytes"
-                        )
-                    else:
-                        print(
-                            f"✗ Plik nie został utworzony mimo braku błędów: {self.output_blend}"
-                        )
+        # Apply animations if requested (this remains in facade for now)
+        if self.animation_mode != "none":
+            sequencer = bpy.context.scene.sequence_editor
+            animation_success = self._apply_animations(sequencer)
+            if not animation_success:
+                print(
+                    "⚠ Animacje nie zostały zastosowane, ale projekt został utworzony"
+                )
+            else:
+                # Save file again after adding animations
+                if self.output_blend:
+                    try:
+                        bpy.ops.wm.save_as_mainfile(filepath=str(self.output_blend))
+                        print(f"✓ Zapisano projekt z animacjami: {self.output_blend}")
+                    except Exception as e:
+                        print(f"✗ Błąd zapisywania projektu z animacjami: {e}")
                         return False
 
-                except Exception as e:
-                    print(f"✗ Błąd zapisywania projektu: {e}")
-                    import traceback
-
-                    traceback.print_exc()
-                    return False
-
-            # 9. Apply animations if requested
-            if self.animation_mode != "none":
-                success = self._apply_animations(sequencer)
-                if not success:
-                    print(
-                        "⚠ Animacje nie zostały zastosowane, ale projekt został utworzony"
-                    )
-                else:
-                    # 10. Save file again after adding animations
-                    if self.output_blend:
-                        try:
-                            bpy.ops.wm.save_as_mainfile(filepath=str(self.output_blend))
-                            print(
-                                f"✓ Zapisano projekt z animacjami: {self.output_blend}"
-                            )
-                        except Exception as e:
-                            print(f"✗ Błąd zapisywania projektu z animacjami: {e}")
-                            return False
-
-            print("=== Konfiguracja projektu VSE zakończona sukcesem ===")
-            return True
-
-        except Exception as e:
-            print(f"✗ Błąd krytyczny: {e}")
-            import traceback
-
-            traceback.print_exc()
-            return False
+        print("=== Konfiguracja projektu VSE zakończona sukcesem ===")
+        return True
 
     def _apply_animations(self, sequencer) -> bool:
         """
@@ -254,31 +170,17 @@ class BlenderVSEConfigurator:
 
         print(f"✓ Found {len(video_strips)} video strips for animation")
 
-        # Apply animation based on mode
-        if self.animation_mode == "beat-switch":
-            success = self._animate_beat_switch(video_strips, animation_data)
-            if success:
-                print("✓ Beat switch animation applied successfully")
-            else:
-                print("✗ Beat switch animation failed")
-            return success
-        elif self.animation_mode == "energy-pulse":
-            success = self._animate_energy_pulse(video_strips, animation_data)
-            if success:
-                print("✓ Energy pulse animation applied successfully")
-            else:
-                print("✗ Energy pulse animation failed")
-            return success
-        elif self.animation_mode == "multi-pip":
-            success = self._animate_multi_pip(video_strips, animation_data)
-            if success:
-                print("✓ Multi-PiP animation applied successfully")
-            else:
-                print("✗ Multi-PiP animation failed")
-            return success
+        # Apply animation based on mode using animation engine
+        success = self.animation_engine.animate(
+            video_strips, animation_data, self.fps, self.animation_mode
+        )
+
+        if success:
+            print(f"✓ Animation mode '{self.animation_mode}' applied successfully")
         else:
-            print(f"✗ Animation mode '{self.animation_mode}' not implemented yet")
-            return False
+            print(f"✗ Animation mode '{self.animation_mode}' failed or not supported")
+
+        return success
 
     def _load_animation_data(self) -> Optional[Dict]:
         """
@@ -426,11 +328,11 @@ class BlenderVSEConfigurator:
         )
 
         # Set initial visibility - first strip visible, others hidden
+        keyframe_helper = KeyframeHelper()
         for i, strip in enumerate(video_strips):
-            strip.blend_alpha = 1.0 if i == 0 else 0.0
-            # Insert keyframe at frame 1 using scene keyframe_insert
-            data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
-            bpy.context.scene.keyframe_insert(data_path=data_path, frame=1)
+            alpha_value = 1.0 if i == 0 else 0.0
+            strip.blend_alpha = alpha_value
+            keyframe_helper.insert_blend_alpha_keyframe(strip.name, 1, alpha_value)
 
         # Animate on beat events
         for beat_index, beat_time in enumerate(beats):
@@ -443,14 +345,11 @@ class BlenderVSEConfigurator:
 
             # Set visibility for all strips
             for strip_index, strip in enumerate(video_strips):
-                if strip_index == active_strip_index:
-                    strip.blend_alpha = 1.0  # Visible
-                else:
-                    strip.blend_alpha = 0.0  # Hidden
-
-                # Insert keyframe using scene keyframe_insert
-                data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
-                bpy.context.scene.keyframe_insert(data_path=data_path, frame=frame)
+                alpha_value = 1.0 if strip_index == active_strip_index else 0.0
+                strip.blend_alpha = alpha_value
+                keyframe_helper.insert_blend_alpha_keyframe(
+                    strip.name, frame, alpha_value
+                )
 
         print("✓ Beat switch animation applied successfully")
         return True
@@ -486,19 +385,14 @@ class BlenderVSEConfigurator:
         )
 
         # Set initial scale to normal
+        keyframe_helper = KeyframeHelper()
         for strip in video_strips:
             if hasattr(strip, "transform"):
                 strip.transform.scale_x = 1.0
                 strip.transform.scale_y = 1.0
-                # Insert keyframe at frame 1 using scene keyframe_insert
-                data_path_x = (
-                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                keyframe_helper.insert_transform_scale_keyframes(
+                    strip.name, 1, 1.0, 1.0
                 )
-                data_path_y = (
-                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
-                )
-                bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=1)
-                bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=1)
 
         # Animate on energy peak events
         for peak_index, peak_time in enumerate(energy_peaks):
@@ -509,19 +403,11 @@ class BlenderVSEConfigurator:
             # Scale up on energy peak
             for strip in video_strips:
                 if hasattr(strip, "transform"):
-                    strip.transform.scale_x = (
-                        AnimationConstants.ENERGY_SCALE_FACTOR
-                    )  # Scale up by 20%
-                    strip.transform.scale_y = AnimationConstants.ENERGY_SCALE_FACTOR
-
-                    # Insert keyframe at peak frame using scene keyframe_insert
-                    data_path_x = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
-                    data_path_y = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
-                    bpy.context.scene.keyframe_insert(
-                        data_path=data_path_x, frame=frame
-                    )
-                    bpy.context.scene.keyframe_insert(
-                        data_path=data_path_y, frame=frame
+                    scale_factor = AnimationConstants.ENERGY_SCALE_FACTOR
+                    strip.transform.scale_x = scale_factor
+                    strip.transform.scale_y = scale_factor
+                    keyframe_helper.insert_transform_scale_keyframes(
+                        strip.name, frame, scale_factor
                     )
 
             # Scale back down after peak (1 frame later)
@@ -530,15 +416,8 @@ class BlenderVSEConfigurator:
                 if hasattr(strip, "transform"):
                     strip.transform.scale_x = 1.0  # Back to normal
                     strip.transform.scale_y = 1.0
-
-                    # Insert keyframe at return frame
-                    data_path_x = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
-                    data_path_y = f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
-                    bpy.context.scene.keyframe_insert(
-                        data_path=data_path_x, frame=return_frame
-                    )
-                    bpy.context.scene.keyframe_insert(
-                        data_path=data_path_y, frame=return_frame
+                    keyframe_helper.insert_transform_scale_keyframes(
+                        strip.name, return_frame, 1.0
                     )
 
         print("✓ Energy pulse animation applied successfully")
@@ -620,61 +499,18 @@ class BlenderVSEConfigurator:
         """
         Calculate Multi-PiP layout positions based on scene resolution.
 
-        In Blender VSE, (0,0) is the center of the screen.
-        Positive X is right, negative X is left.
-        Positive Y is up, negative Y is down.
-
         Args:
             strip_count: Number of video strips
 
         Returns:
             List of (pos_x, pos_y, scale) tuples for each strip
         """
-        # Get scene resolution for calculating offsets
+        # Use LayoutManager for centralized layout calculation
         width = bpy.context.scene.render.resolution_x
         height = bpy.context.scene.render.resolution_y
+        layout_manager = BlenderLayoutManager(width, height)
 
-        # PiP settings
-        pip_scale = 0.25
-        pip_margin = AnimationConstants.PIP_MARGIN  # Distance from edge
-
-        # Calculate corner positions relative to center (0,0)
-        # For 1280x720: half_width=640, half_height=360
-        half_width = width // 2
-        half_height = height // 2
-
-        # Corner positions (offset from center)
-        top_left_x = -(half_width - pip_margin)  # Left side
-        top_left_y = half_height - pip_margin  # Top side
-        top_right_x = half_width - pip_margin  # Right side
-        top_right_y = half_height - pip_margin  # Top side
-        bottom_left_x = -(half_width - pip_margin)  # Left side
-        bottom_left_y = -(half_height - pip_margin)  # Bottom side
-        bottom_right_x = half_width - pip_margin  # Right side
-        bottom_right_y = -(half_height - pip_margin)  # Bottom side
-
-        layout = []
-
-        if strip_count >= 1:
-            # video1: Main camera (fullscreen, center)
-            layout.append((0, 0, 1.0))
-        if strip_count >= 2:
-            # video2: Main camera (fullscreen, center)
-            layout.append((0, 0, 1.0))
-        if strip_count >= 3:
-            # video3: Top-right corner PiP
-            layout.append((top_right_x, top_right_y, pip_scale))
-        if strip_count >= 4:
-            # video4: Top-left corner PiP
-            layout.append((top_left_x, top_left_y, pip_scale))
-        if strip_count >= 5:
-            # video5: Bottom-right corner PiP
-            layout.append((bottom_right_x, bottom_right_y, pip_scale))
-        if strip_count >= 6:
-            # video6: Bottom-left corner PiP (fallback)
-            layout.append((bottom_left_x, bottom_left_y, pip_scale))
-
-        return layout
+        return layout_manager.calculate_multi_pip_layout(strip_count)
 
     def _setup_main_camera_sections(
         self, main_cameras: Dict, animation_data: Dict
@@ -702,6 +538,7 @@ class BlenderVSEConfigurator:
             return False
 
         # Initially hide all main cameras
+        keyframe_helper = KeyframeHelper()
         for strip in main_cameras.values():
             strip.blend_alpha = 0.0
 
@@ -722,17 +559,15 @@ class BlenderVSEConfigurator:
             # Hide all cameras at section start
             for strip in main_cameras.values():
                 strip.blend_alpha = 0.0
-                data_path = f'sequence_editor.sequences_all["{strip.name}"].blend_alpha'
-                bpy.context.scene.keyframe_insert(
-                    data_path=data_path, frame=start_frame
+                keyframe_helper.insert_blend_alpha_keyframe(
+                    strip.name, start_frame, 0.0
                 )
 
             # Show active camera
             active_strip.blend_alpha = 1.0
-            data_path = (
-                f'sequence_editor.sequences_all["{active_strip.name}"].blend_alpha'
+            keyframe_helper.insert_blend_alpha_keyframe(
+                active_strip.name, start_frame, 1.0
             )
-            bpy.context.scene.keyframe_insert(data_path=data_path, frame=start_frame)
 
         return True
 
@@ -763,20 +598,14 @@ class BlenderVSEConfigurator:
             return True
 
         # Make all corner PiPs visible
+        keyframe_helper = KeyframeHelper()
         for strip in corner_pips.values():
             strip.blend_alpha = 1.0
 
         # Add beat-based scale pulsing (like energy-pulse mode)
         for strip in corner_pips.values():
             # Set initial scale keyframes at frame 1
-            data_path_x = (
-                f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
-            )
-            data_path_y = (
-                f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
-            )
-            bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=1)
-            bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=1)
+            keyframe_helper.insert_transform_scale_keyframes(strip, 1)
 
         # Animate on energy peaks (bass response)
         for peak_index, peak_time in enumerate(energy_peaks):
@@ -785,32 +614,21 @@ class BlenderVSEConfigurator:
             for strip in corner_pips.values():
                 # Get current base scale from layout
                 current_scale = strip.transform.scale_x
-                pulse_scale = (
-                    current_scale * AnimationConstants.PIP_SCALE_FACTOR
-                )  # 10% pulse for corner PiPs
+                pulse_scale = current_scale * AnimationConstants.PIP_SCALE_FACTOR
 
                 # Scale up on energy peak
                 strip.transform.scale_x = pulse_scale
                 strip.transform.scale_y = pulse_scale
-
-                data_path_x = (
-                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_x'
+                keyframe_helper.insert_transform_scale_keyframes(
+                    strip.name, frame, pulse_scale
                 )
-                data_path_y = (
-                    f'sequence_editor.sequences_all["{strip.name}"].transform.scale_y'
-                )
-                bpy.context.scene.keyframe_insert(data_path=data_path_x, frame=frame)
-                bpy.context.scene.keyframe_insert(data_path=data_path_y, frame=frame)
 
                 # Scale back down (1 frame later)
                 return_frame = frame + 1
                 strip.transform.scale_x = current_scale
                 strip.transform.scale_y = current_scale
-                bpy.context.scene.keyframe_insert(
-                    data_path=data_path_x, frame=return_frame
-                )
-                bpy.context.scene.keyframe_insert(
-                    data_path=data_path_y, frame=return_frame
+                keyframe_helper.insert_transform_scale_keyframes(
+                    strip.name, return_frame, current_scale
                 )
 
         print(f"✓ Corner PiP effects applied to {len(corner_pips)} strips")

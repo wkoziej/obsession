@@ -69,14 +69,14 @@ class TestAnimationConstants:
         assert AnimationConstants.ENERGY_SCALE_FACTOR == 1.2
 
     def test_pip_scale_factor_exists_and_valid(self):
-        """PiP scale factor should be a positive float greater than 1.0."""
+        """PiP scale factor should be a positive float for corner scaling."""
         assert hasattr(AnimationConstants, "PIP_SCALE_FACTOR")
         assert isinstance(AnimationConstants.PIP_SCALE_FACTOR, (int, float))
-        assert AnimationConstants.PIP_SCALE_FACTOR > 1.0
+        assert AnimationConstants.PIP_SCALE_FACTOR > 0.0
 
     def test_pip_scale_factor_value(self):
-        """PiP scale factor should be 1.1 (current system value)."""
-        assert AnimationConstants.PIP_SCALE_FACTOR == 1.1
+        """PiP scale factor should be 0.3 (small corner PiP scale)."""
+        assert AnimationConstants.PIP_SCALE_FACTOR == 0.3
 
     def test_pip_margin_exists_and_valid(self):
         """PiP margin should be a positive integer."""
