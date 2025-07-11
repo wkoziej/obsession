@@ -164,8 +164,8 @@ class BlenderProjectManager:
             "BLENDER_VSE_OUTPUT_BLEND": str(output_blend.resolve()),
             "BLENDER_VSE_RENDER_OUTPUT": str(render_output.resolve()),
             "BLENDER_VSE_FPS": str(fps),
-            "BLENDER_VSE_RESOLUTION_X": "1280",
-            "BLENDER_VSE_RESOLUTION_Y": "720",
+            "BLENDER_VSE_RESOLUTION_X": "740",
+            "BLENDER_VSE_RESOLUTION_Y": "554",
         }
 
         logger.debug(f"Prepared environment variables: {env_vars}")

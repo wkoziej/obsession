@@ -16,7 +16,8 @@ class MultiPipAnimator:
     def __init__(self):
         """Initialize MultiPipAnimator with required components."""
         self.keyframe_helper = KeyframeHelper()
-        self.layout_manager = BlenderLayoutManager()
+        # Layout manager will be initialized with actual scene resolution in animate()
+        self.layout_manager = None
         self.vintage_effects = VintageFilmEffects()
 
     def get_animation_mode(self) -> str:
@@ -72,16 +73,33 @@ class MultiPipAnimator:
             f"✓ Multi-PiP animation: {len(video_strips)} strips, {len(sections)} sections, {len(beats)} beats at {fps} FPS"
         )
 
+        # Initialize layout manager with actual scene resolution
+        import bpy
+
+        scene_width = bpy.context.scene.render.resolution_x
+        scene_height = bpy.context.scene.render.resolution_y
+        self.layout_manager = BlenderLayoutManager(scene_width, scene_height)
+
+        print(
+            f"✓ Initialized layout manager with scene resolution: {scene_width}x{scene_height}"
+        )
+
         # First: Apply layout positions to ALL strips (like original implementation)
         layout = self.layout_manager.calculate_multi_pip_layout(len(video_strips))
         for i, strip in enumerate(video_strips):
             if i < len(layout):
                 pos_x, pos_y, base_scale = layout[i]
                 if hasattr(strip, "transform"):
-                    # Calculate resolution-aware scale
-                    adjusted_scale = self._calculate_resolution_aware_scale(
-                        strip, base_scale
-                    )
+                    # For main cameras (first 2 strips): use base scale to fill canvas
+                    # For PiP (other strips): use resolution-aware scaling
+                    if i < 2:  # Main cameras - force fill canvas
+                        adjusted_scale = (
+                            base_scale  # Use base scale (1.0) to fill canvas
+                        )
+                    else:  # PiP strips - use resolution-aware scaling
+                        adjusted_scale = self._calculate_resolution_aware_scale(
+                            strip, base_scale
+                        )
 
                     strip.transform.offset_x = pos_x
                     strip.transform.offset_y = pos_y
@@ -141,9 +159,15 @@ class MultiPipAnimator:
             print("✗ Need at least 2 main cameras for section switching")
             return False
 
-        # Initially hide all main cameras
+        # Initially show first main camera at frame 1
+        first_strip = list(main_cameras.values())[0]
         for strip in main_cameras.values():
-            strip.blend_alpha = 0.0
+            if strip == first_strip:
+                strip.blend_alpha = 1.0
+                self.keyframe_helper.insert_blend_alpha_keyframe(strip.name, 1, 1.0)
+            else:
+                strip.blend_alpha = 0.0
+                self.keyframe_helper.insert_blend_alpha_keyframe(strip.name, 1, 0.0)
 
         # Setup section switching (alternating between video1 and video2)
         for section_index, section in enumerate(sections):
@@ -166,10 +190,15 @@ class MultiPipAnimator:
                     strip.name, start_frame, 0.0
                 )
 
-            # Show active camera
+            # Show active camera for the entire section duration
             active_strip.blend_alpha = 1.0
             self.keyframe_helper.insert_blend_alpha_keyframe(
                 active_strip.name, start_frame, 1.0
+            )
+
+            # Keep active camera visible until end of section
+            self.keyframe_helper.insert_blend_alpha_keyframe(
+                active_strip.name, end_frame, 1.0
             )
 
     def _animate_pip_corner_effects(
@@ -328,10 +357,16 @@ class MultiPipAnimator:
 
         # Vintage effects configuration (subtle for main cameras)
         vintage_config = {
-            "camera_shake": {"enabled": True, "intensity": 6.0},
+            "camera_shake": {"enabled": True, "intensity": 2.0},
             "film_jitter": {"enabled": True, "intensity": 1.0},
-            "brightness_flicker": {"enabled": True, "amount": 0.08},
+            "brightness_flicker": {
+                "enabled": False,
+                "amount": 0.28,
+            },  # DISABLED - conflicts with blend_alpha camera switching
             "rotation_wobble": {"enabled": True, "degrees": 0.5},
+            "black_white": {"enabled": True, "intensity": 0.9},
+            "film_grain": {"enabled": True, "intensity": 0.12},
+            "vintage_grade": {"enabled": True, "sepia": -0.35, "contrast": 0.2},
         }
 
         success = True

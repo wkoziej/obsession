@@ -16,5 +16,7 @@ class AnimationConstants:
     """Constants for Blender VSE animation effects."""
 
     ENERGY_SCALE_FACTOR = 1.2
-    PIP_SCALE_FACTOR = 0.35
-    PIP_MARGIN = 200
+    PIP_SCALE_FACTOR = 0.25
+    PIP_MARGIN_PERCENT = (
+        0.05  # 5% margin from edges - should work with corrected PiP size calculation
+    )

@@ -83,29 +83,63 @@ class BlenderLayoutManager:
 
         return layout
 
-    def get_corner_positions(self, margin: int = None) -> List[Tuple[int, int]]:
+    def get_corner_positions(
+        self, margin_percent: float = None
+    ) -> List[Tuple[int, int]]:
         """
-        Get corner positions with margin from edges.
+        Get corner positions with proportional margin from edges.
 
         Args:
-            margin: Distance from edge. Defaults to AnimationConstants.PIP_MARGIN
+            margin_percent: Margin as percentage of resolution (0.0-1.0).
+                          Defaults to AnimationConstants.PIP_MARGIN_PERCENT
 
         Returns:
             List of (x, y) tuples for corner positions
         """
-        if margin is None:
-            margin = AnimationConstants.PIP_MARGIN
+        if margin_percent is None:
+            margin_percent = AnimationConstants.PIP_MARGIN_PERCENT
 
         # Calculate half dimensions for center-based coordinates
         half_width = self.resolution_x // 2
         half_height = self.resolution_y // 2
 
+        # Calculate proportional margins based on resolution
+        margin_x = int(half_width * margin_percent)
+        margin_y = int(half_height * margin_percent)
+
+        # Account for PiP size with resolution-aware scaling
+        # PiP videos are typically 640x480, project is 740x554
+        # Resolution-aware scaling: min(740/640, 554/480) = 1.15
+        # Effective PiP scale: 0.25 * 1.15 = 0.29 (not 0.25!)
+        effective_pip_scale = (
+            AnimationConstants.PIP_SCALE_FACTOR * 1.15
+        )  # Account for typical resolution scaling
+        pip_half_width = int(half_width * effective_pip_scale)
+        pip_half_height = int(half_height * effective_pip_scale)
+
         # Corner positions relative to center (0,0)
+        # Position PiP centers so their edges are at margin distance from canvas edges
+        top_right_x = half_width - margin_x - pip_half_width
+        top_right_y = half_height - margin_y - pip_half_height
+
+        print("DEBUG PiP positioning:")
+        print(f"  Canvas: {self.resolution_x}x{self.resolution_y}")
+        print(f"  Half dimensions: {half_width}x{half_height}")
+        print(f"  Margin: {margin_x:.1f}x{margin_y:.1f} ({margin_percent * 100:.1f}%)")
+        print(
+            f"  PiP half-size: {pip_half_width:.1f}x{pip_half_height:.1f} (effective scale: {effective_pip_scale:.3f})"
+        )
+        print(f"  Top-right PiP center: ({top_right_x:.1f}, {top_right_y:.1f})")
+        print(
+            f"  Top-right PiP edges: left={top_right_x - pip_half_width:.1f}, right={top_right_x + pip_half_width:.1f}"
+        )
+        print(f"  Canvas bounds: left={-half_width}, right={half_width}")
+
         corners = [
-            (half_width - margin, half_height - margin),  # Top-right
-            (-(half_width - margin), half_height - margin),  # Top-left
-            (-(half_width - margin), -(half_height - margin)),  # Bottom-left
-            (half_width - margin, -(half_height - margin)),  # Bottom-right
+            (top_right_x, top_right_y),  # Top-right
+            (-top_right_x, top_right_y),  # Top-left
+            (-top_right_x, -top_right_y),  # Bottom-left
+            (top_right_x, -top_right_y),  # Bottom-right
         ]
 
         return corners
