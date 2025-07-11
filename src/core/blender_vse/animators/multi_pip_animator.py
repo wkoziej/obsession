@@ -364,7 +364,7 @@ class MultiPipAnimator:
                 "amount": 0.28,
             },  # DISABLED - conflicts with blend_alpha camera switching
             "rotation_wobble": {"enabled": True, "degrees": 0.5},
-            "black_white": {"enabled": True, "intensity": 0.9},
+            "black_white": {"enabled": True, "intensity": 0.8},
             "film_grain": {"enabled": True, "intensity": 0.12},
             "vintage_grade": {"enabled": True, "sepia": -0.35, "contrast": 0.2},
         }

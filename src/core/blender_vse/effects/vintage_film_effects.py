@@ -297,15 +297,10 @@ class VintageFilmEffects:
         try:
             print(f"  Applying B&W effect to {strip.name} (intensity: {intensity})")
 
-            # Add Color modifier for desaturation
-            modifier = strip.modifiers.new(name="Vintage_BW", type="COLOR_BALANCE")
-
-            # Reduce saturation for B&W effect
-            # In Blender VSE, saturation is controlled via lift_gamma_gain
-            # Setting saturation to (1-intensity) gives us the B&W effect
-            saturation = 1.0 - intensity
-
-            modifier.color_balance.saturation = saturation
+            # Use strip's built-in color_saturation property for B&W effect
+            # Setting saturation with controlled intensity for pure B&W at high values
+            saturation = max(0.0, 1.0 - intensity * 1.2)
+            strip.color_saturation = saturation
 
             return True
 
