@@ -324,3 +324,210 @@ class TestBlenderProjectManager:
         fps = manager._read_fps_from_metadata(metadata_file)
 
         assert fps == 30  # Default value
+
+
+class TestBlenderProjectManagerAudioIntegration:
+    """Test cases for BlenderProjectManager with audio analysis integration."""
+
+    def test_prepare_environment_variables_with_audio_analysis(self, tmp_path):
+        """Test environment variables preparation with audio analysis data."""
+        manager = BlenderProjectManager()
+
+        # Create test video files
+        video_files = [tmp_path / "camera1.mp4", tmp_path / "screen.mkv"]
+        for vf in video_files:
+            vf.touch()
+
+        # Create test audio file
+        main_audio = tmp_path / "main_audio.m4a"
+        main_audio.touch()
+
+        # Create test paths
+        output_blend = tmp_path / "project.blend"
+        render_output = tmp_path / "render" / "project_final.mp4"
+
+        # Create test audio analysis data
+        analysis_data = {
+            "duration": 10.0,
+            "tempo": {"bpm": 120.0},
+            "animation_events": {"beats": [1.0, 2.0, 3.0]},
+        }
+
+        # Create a temporary analysis file
+        import json as json_module
+
+        analysis_file = tmp_path / "analysis" / "test_analysis.json"
+        analysis_file.parent.mkdir(exist_ok=True)
+        with open(analysis_file, "w") as f:
+            json_module.dump(analysis_data, f)
+
+        # Test with audio analysis
+        env_vars = manager._prepare_environment_variables_with_analysis(
+            video_files,
+            main_audio,
+            output_blend,
+            render_output,
+            fps=30,
+            analysis_file_path=analysis_file,
+            animation_mode="beat-switch",
+            beat_division=8,
+        )
+
+        # Check standard variables exist
+        assert "BLENDER_VSE_VIDEO_FILES" in env_vars
+        assert "BLENDER_VSE_MAIN_AUDIO" in env_vars
+        assert "BLENDER_VSE_OUTPUT_BLEND" in env_vars
+        assert "BLENDER_VSE_RENDER_OUTPUT" in env_vars
+        assert "BLENDER_VSE_FPS" in env_vars
+
+        # Check new audio analysis variables
+        assert env_vars["BLENDER_VSE_ANIMATION_MODE"] == "beat-switch"
+        assert env_vars["BLENDER_VSE_BEAT_DIVISION"] == "8"
+        assert "BLENDER_VSE_AUDIO_ANALYSIS_FILE" in env_vars
+        assert env_vars["BLENDER_VSE_AUDIO_ANALYSIS_FILE"] == str(analysis_file)
+
+        # Verify analysis file contains correct data
+        with open(analysis_file, "r") as f:
+            loaded_analysis = json_module.load(f)
+        assert loaded_analysis == analysis_data
+
+    def test_prepare_environment_variables_without_audio_analysis(self, tmp_path):
+        """Test environment variables preparation without audio analysis."""
+        manager = BlenderProjectManager()
+
+        # Create test video files
+        video_files = [tmp_path / "camera1.mp4"]
+        for vf in video_files:
+            vf.touch()
+
+        main_audio = tmp_path / "main_audio.m4a"
+        main_audio.touch()
+
+        output_blend = tmp_path / "project.blend"
+        render_output = tmp_path / "render" / "project_final.mp4"
+
+        # Test without audio analysis
+        env_vars = manager._prepare_environment_variables_with_analysis(
+            video_files, main_audio, output_blend, render_output, fps=30
+        )
+
+        # Check standard variables exist
+        assert "BLENDER_VSE_VIDEO_FILES" in env_vars
+        assert "BLENDER_VSE_MAIN_AUDIO" in env_vars
+
+        # Check audio analysis variables are not set or have defaults
+        assert env_vars.get("BLENDER_VSE_ANIMATION_MODE") == "none"
+        assert env_vars.get("BLENDER_VSE_BEAT_DIVISION") == "8"
+        assert env_vars.get("BLENDER_VSE_AUDIO_ANALYSIS_FILE") == ""
+
+    def test_create_vse_project_with_audio_analysis(
+        self, sample_recording_structure, tmp_path
+    ):
+        """Test create_vse_project with audio analysis integration."""
+        # Create audio analysis file
+        from src.core.file_structure import FileStructureManager
+
+        analysis_data = {
+            "duration": 5.0,
+            "tempo": {"bpm": 140.0},
+            "animation_events": {"beats": [0.5, 1.0, 1.5]},
+        }
+
+        # Save analysis to structure
+        video_file = sample_recording_structure / "test_video.mkv"
+        video_file.touch()
+        FileStructureManager.save_audio_analysis(video_file, analysis_data)
+
+        manager = BlenderProjectManager()
+        # Create mock script file
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="Success", stderr="")
+
+            # Create project with animation mode
+            _ = manager.create_vse_project(
+                sample_recording_structure,
+                animation_mode="beat-switch",
+                beat_division=4,
+            )
+
+            # Verify subprocess was called
+            mock_run.assert_called_once()
+            args, kwargs = mock_run.call_args
+
+            # Check environment variables were passed
+            env_passed = kwargs.get("env", {})
+            assert "BLENDER_VSE_ANIMATION_MODE" in env_passed
+            assert env_passed["BLENDER_VSE_ANIMATION_MODE"] == "beat-switch"
+            assert env_passed["BLENDER_VSE_BEAT_DIVISION"] == "4"
+
+    def test_create_vse_project_missing_audio_analysis(
+        self, sample_recording_structure, tmp_path
+    ):
+        """Test create_vse_project when audio analysis is requested but missing."""
+        manager = BlenderProjectManager()
+        manager.script_path = tmp_path / "blender_vse_script.py"
+        manager.script_path.touch()
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = Mock(stdout="Success", stderr="")
+
+            # Create project with animation mode but no analysis file
+            _ = manager.create_vse_project(
+                sample_recording_structure, animation_mode="beat-switch"
+            )
+
+            # Should succeed but use default/empty analysis
+            mock_run.assert_called_once()
+            args, kwargs = mock_run.call_args
+            env_passed = kwargs.get("env", {})
+            assert env_passed["BLENDER_VSE_ANIMATION_MODE"] == "beat-switch"
+            # File path should be generated even if file doesn't exist (Blender will handle gracefully)
+            expected_path = (
+                sample_recording_structure
+                / "analysis"
+                / f"{sample_recording_structure.name}_analysis.json"
+            )
+            assert env_passed["BLENDER_VSE_AUDIO_ANALYSIS_FILE"] == str(expected_path)
+
+    def test_validate_animation_mode_valid_modes(self):
+        """Test validation of animation modes."""
+        manager = BlenderProjectManager()
+
+        valid_modes = [
+            "none",
+            "beat-switch",
+            "energy-pulse",
+            "section-transition",
+            "multi-pip",
+        ]
+        for mode in valid_modes:
+            # Should not raise exception
+            manager._validate_animation_mode(mode)
+
+    def test_validate_animation_mode_invalid_mode(self):
+        """Test validation of invalid animation mode."""
+        manager = BlenderProjectManager()
+
+        with pytest.raises(ValueError, match="Invalid animation mode"):
+            manager._validate_animation_mode("invalid-mode")
+
+    def test_validate_beat_division_valid_values(self):
+        """Test validation of beat division values."""
+        manager = BlenderProjectManager()
+
+        valid_divisions = [1, 2, 4, 8, 16]
+        for division in valid_divisions:
+            # Should not raise exception
+            manager._validate_beat_division(division)
+
+    def test_validate_beat_division_invalid_values(self):
+        """Test validation of invalid beat division values."""
+        manager = BlenderProjectManager()
+
+        invalid_divisions = [0, -1, 3, 5, 32]
+        for division in invalid_divisions:
+            with pytest.raises(ValueError, match="Invalid beat division"):
+                manager._validate_beat_division(division)
